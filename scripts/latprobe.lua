@@ -16,7 +16,10 @@ L.run{ frames = tonumber(os.getenv("SHO_FRAMES") or 7000), input = input, on_fra
   if L.u16(0xFFC704) & 0x7FFC ~= 0x18 then return end
   for i = 0, 4 do L.mem:write_u16(0xFFB648 + 2*i, 15) end
   if L.u16(0xFF0616) == 0 then return end
-  L.pad({ [os.getenv("SHO_BTN") or "c"] = true })
+  local pd = { [os.getenv("SHO_BTN") or "c"] = true }
+  if os.getenv("SHO_TURBO") then pd.c = true end   -- C = turbo (needs engine tier >= 3 and speed > $F0)
+  L.pad(pd)
+  if os.getenv("SHO_ENGINE") then L.mem:write_u16(0xFFB61A, tonumber(os.getenv("SHO_ENGINE"))) end
   local st = L.u16(0xFF067E)
   if st == 2 or st == 3 then
     if v0 > 0 and n == 0 then L.mem:write_u16(0xFF064A, v0) end
@@ -24,7 +27,7 @@ L.run{ frames = tonumber(os.getenv("SHO_FRAMES") or 7000), input = input, on_fra
     local v = (st == 3) and l2 or -l2
     L.mem:write_u16(0xFF0614, v & 0xFFFF)
     n = n + 1; sg = sg + L.u32(0xFF0646); sv = sv + L.u16(0xFF064A); sk = sk + (L.u16(0xFF066A) ~= 0 and 1 or 0)
-    if n % 15 == 0 then
+    if n % 15 == 0 and n <= 150 then
       print(string.format("LP lat=%d f=%d speed=%d avg_gain=%d skid_frac=%.2f f65a=%04X state=%d radius=%d", lat, f, sv // 15, sg // 15, sk / 15, L.u16(0xFF065A), st, L.u16(0xFF0682)))
       sg, sv, sk = 0, 0, 0
     end
