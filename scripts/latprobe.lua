@@ -7,6 +7,8 @@ for fr, b, d in (os.getenv("SHO_INPUT") or ""):gmatch("(%d+):(%a+):?(%d*)") do i
 local rival = tonumber(os.getenv("SHO_RIVAL") or 3)
 local lat = tonumber(os.getenv("SHO_LAT") or 0)
 local v0 = tonumber(os.getenv("SHO_V0") or 0)   -- poke the speed once when the first curve frame is reached
+local exs, exl = (os.getenv("SHO_EXC") or "0:0"):match("(%d+):(%d+)")   -- SHO_EXC=start:len curve-frame window where the lateral position is 310 instead
+exs, exl = tonumber(exs), tonumber(exl)
 local n, sg, sv, sk, prev = 0, 0, 0, 0, nil
 L.run{ frames = tonumber(os.getenv("SHO_FRAMES") or 7000), input = input, on_frame = function(f)
   if f == 1250 then L.mem:write_u32(0xFFB638, 0x00999999) end
@@ -14,11 +16,12 @@ L.run{ frames = tonumber(os.getenv("SHO_FRAMES") or 7000), input = input, on_fra
   if L.u16(0xFFC704) & 0x7FFC ~= 0x18 then return end
   for i = 0, 4 do L.mem:write_u16(0xFFB648 + 2*i, 15) end
   if L.u16(0xFF0616) == 0 then return end
-  L.pad({ c = true })
+  L.pad({ [os.getenv("SHO_BTN") or "c"] = true })
   local st = L.u16(0xFF067E)
   if st == 2 or st == 3 then
     if v0 > 0 and n == 0 then L.mem:write_u16(0xFF064A, v0) end
-    local v = (st == 3) and lat or -lat
+    local l2 = (n >= exs and n < exs + exl) and 310 or lat
+    local v = (st == 3) and l2 or -l2
     L.mem:write_u16(0xFF0614, v & 0xFFFF)
     n = n + 1; sg = sg + L.u32(0xFF0646); sv = sv + L.u16(0xFF064A); sk = sk + (L.u16(0xFF066A) ~= 0 and 1 or 0)
     if n % 15 == 0 then
