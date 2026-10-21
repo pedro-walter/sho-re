@@ -1,0 +1,80 @@
+# AAAAAA name [b|w|l|N] description        (68k bus addresses; RAM = $FF0000-$FFFFFF)
+FF0000 warm_magic [l] 'init' ($696E6974) once the first-boot init has run; survives a soft reset
+FF0500 vblank_ticks [w] incremented by the VBlank handler every frame; wait_vblank clears it and spins until non-zero
+FF05D2 hint_handler [46] HBlank (level 4) handler code copied here from ROM $6DA6 by install_hint_stub (vector $70 -> here)
+FFC704 game_mode [w] main-loop mode: (value & $7FFC) indexes the 4-byte bra table at $6CF2 -> mode code (see docs/02)
+FFC705 game_mode_flags [b] low byte of game_mode; bit 0 = 'mode entry already done' (mode code does bset #0 here first)
+FFC722 vblank_mode [w] index into the VBlank sub-handler table at $6D42 (0 = nothing to do)
+FFC724 wait_count [w] counter used by wait_8_vblanks
+FFC726 main_iter [b] incremented every pass of the main loop
+FFC754 sound_mute [b] non-zero = send_sound_cmd does nothing
+FFC890 region_overseas [w] IO_VERSION & $80 (0 = Japan domestic)
+FFC892 region_pal [w] IO_VERSION & $40 (PAL machine)
+FFC89C region_overseas2 [w] copy of region_overseas, preserved across the RAM clear
+FFD380 palette_buf [128] 64 CRAM colours (word each, 0BGR) working copy; faded by fade_out, uploaded by sub_00846C
+FFC706 pad1_held [b] joypad 1 held: bit0 up,1 down,2 left,3 right,4 B,5 C,6 A,7 Start
+FFC707 pad1_new [b] joypad 1 newly pressed this frame (same bits)
+FFC720 next_mode_req [w] race code asks the race loop (mode $18) to switch to this game_mode
+FFC82C original_mode [w] non-zero = Original mode race (0 = arcade)
+FFC85A rival_index [w] copy of $FFB606 used by the race (lap count / rival times)
+FFC896 wear_done_flag [w] set once the crash wear has been applied for the current fall
+FFC898 retire_flag [w] race is being retired (frame/engine/tire failed)
+FFC832 race_time [l] player race time BCD 00 MM SS CC
+FFC83A rival_time [l] rival race time BCD
+FF0502 rng_state [l] 32-bit state of the LCG used by sub_0084C2 (returns 16 bits in D0)
+FF0614 lateral_slip [w] signed lateral slip/drift of the bike; |x|>$12C = skidding
+FF064A speed [l] bike speed (units: km/h-ish x ~$100?)
+FF066A skid_flag [w]
+FF063A steer_out [w] steering output derived from handlebar position
+FFC738 throttle_pos [w] accelerator position (rises +$14/frame while held, max $A8)
+FFC73A brake_pos [w] brake pressure (max $C5; rate from brake tier)
+FFC73C handlebar [w] handlebar position, $80 centre, $3A..$C6 range
+FFB600 orig_flags [b] title/menu flags
+FFB602 shop_cmd [w] shop command being run (0 menu,4 parts,8 mechanic,$C race,$10 end)
+FFB603 shop_cmd_init [b] bit0 set once the command screen has been initialised
+FFB604 shop_cursor [w] COMMAND menu cursor 0..3
+FFB606 rival_idx [w] current rival 0..6
+FFB608 rival_msg_state [w] 0 intro 1 won 2 lost 3 five wins
+FFB60A mechanic_best [w] best mechanic hired 0..6
+FFB60C phrase_cat [w] mechanic phrase category 0..3
+FFB60E mechanic_view [w] mechanic shown on the mechanic screen
+FFB610 sponsor_idx [w] sponsor 0..6
+FFB612 sponsor_msg_state [w] 0 intro 1 lost clearly 2 lost narrowly 3 won 4 five wins
+FFB616 part_slot [w] selected slot: 0 frame 1 engine 2 brake 3 muffler 4 oil 5 tire
+FFB618 tier_frame [w] installed tier (slot0)
+FFB61A tier_engine [w]
+FFB61C tier_brake [w]
+FFB61E tier_muffler [w]
+FFB620 tier_oil [w]
+FFB622 tier_tire [w]
+FFB624 browse_frame [w] tier shown in the shop (slots 0..5 at +2 steps)
+FFB630 mech_owned [7] hired flags per mechanic
+FFB638 money [l] BCD, unit $100
+FFB63C player_time [l] BCD race time of last race
+FFB640 rival_time_saved [l] BCD
+FFB644 races_vs_rival [w]
+FFB646 wins_vs_rival [w]
+FFB648 hp_frame [w] part health 0..15, negative = failed
+FFB64A hp_engine [w]
+FFB64C hp_brake [w]
+FFB64E hp_muffler [w]
+FFB650 hp_oil [w]
+FFB652 hp_tire [w]
+FFB655 race_flags [b] bit0 shop visited since race, bit1 race just finished
+FFB656 mech_roll [w] last mechanic roll (non-zero = +1 repair round)
+FFB658 password_chars [32] password characters
+FF0614 lateral_slip [w] (really the rider's lateral position on the road, 0 = centre; also called slip). Note: FF0616 is the 32-bit lap-distance counter's word used as "dist" (2048 per lap)
+FF0646 dist_gain [l] distance added this frame = 269 * speed * (radius + side/40) / radius in curves
+FF0672 road_ptr [l] pointer into the road-shape stream (start, radius, state 1/2/3 per 6 bytes)
+FF0676 road_next_state [w] state of the segment 40 units ahead (lookahead)
+FF067E road_state [w] current segment: 1 straight, 2 left-hand, 3 right-hand curve
+FF0682 road_radius [w] radius of the current curve (smaller = sharper)
+FF0690 bot_count [w] active bots (last frame); FF0634 = average bot +$A
+FF064E overtakes [w] bots passed
+FF0554 time_left [b] Arcade: seconds left (BCD); +1 = ticks to next second, +2 = ticks per second ($1E), +3 = tick counter in the current second (hundredths = tick x 100/30), +4 = elapsed seconds (BCD), +5 = hundredths (BCD)
+FF0557 sec_tick [b] Arcade: ticks inside the current elapsed second; NOT cleared at a checkpoint (the lap-time carry bug)
+FF0558 section_time [w] Arcade: elapsed section time, high byte seconds / low byte hundredths, both BCD; cleared at a checkpoint ($E6A6)
+FF060C course [w] 0..3 (3/5/7/9 stages); FF060A = stage (Original mode: lap counter)
+FF0602 event_ptr [l] curve-event stream (distance, shape id) pairs ending $7FFF; FF061E = current shape id, FF0606 = byte offset in the stream
+FF066E object_ptr [l] roadside-object stream
+FF0730 shape_state [b] curve-shape state machine (+4: 0 idle, 1 start, 2 running); +8 long = progress, +$C = shape table pointer

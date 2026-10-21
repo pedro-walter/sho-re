@@ -1,0 +1,76 @@
+@000200 vec_unused_loop
+;; Default exception vector: infinite loop.
+@000202 vec_unused_rte
+;; Default interrupt vector: rte.
+@006BAC reset
+;; Reset vector. TMSS unlock, region flags, ROM checksum ($1A4 end address, $18E checksum), clears RAM
+;; (keeps region words), first-boot init (palette, Z80 driver, sound), then enters main_loop.
+@006CE0 main_loop
+;; Main loop: runs the mode routine selected by game_mode ($FFC704 & $7FFC) through the bra table at $6CF2.
+;; Each mode routine returns after one step; the loop repeats forever. Modes are state machines that
+;; use wait_vblank to pace themselves.
+@006CF2 mode_table
+@006D2A vblank_handler
+;; Level-6 interrupt. Saves all regs, dispatches on vblank_mode ($FFC722) through the table at $6D42, then bumps vblank_ticks.
+@006D4E wait_vblank
+;; Clears vblank_ticks and spins until the VBlank handler increments it (waits one frame).
+@006D5E wait_8_vblanks
+;; Calls wait_vblank until wait_count reaches 8.
+@006D70 bad_checksum_screen
+;; ROM checksum mismatch: paint the palette and hang.
+@006D8E install_hint_stub
+;; Copies 23 words of code from $6DA6 to RAM $FF05D2 (the HBlank handler).
+@006DD4 fade_out
+;; Fades palette_buf to black in 7 steps (each colour nibble reduced), uploading with sub_00846C each step.
+@006E28 load_z80_driver
+;; Stops the Z80, copies the sound driver ($7D7F4, $1A24 bytes) to Z80 RAM, resets/starts the Z80. Z80 $1C3C = PAL flag.
+@006E8C send_sound_cmd
+;; D7.b = sound command written to Z80 RAM $1C03 (mailbox), unless sound_mute. Waits for bus grant.
+@006EB4 z80_request_bus
+@006EBE z80_release_bus
+@0052A4 mode_shop
+;; game_mode $24: Original-mode shop menu (COMMAND: PARTS / MECHANIC / RACE / END). First call = init (sub at $5AD6), later = input.
+@005AD6 shop_init
+;; Shop screen set-up; at its end ($5EE2..$5FCE) the post-race processing: base wear, mechanic roll, repair/extra wear.
+@0053CE shop_cmd_mechanic
+;; MECHANIC command: Left/Right browse $B60E, C hires (price table $1563E, BCD), B leaves.
+@005700 race_command
+;; RACE pressed: five wins -> next rival, five losses -> demoted, else go to the race.
+@005A68 shop_show_sponsor_msg
+@0060AC shop_show_messages
+@00614E mode_parts_shop
+;; game_mode $28: parts shop. Up/Down = slot ($B616), Left/Right = browse tier ($B624), C = buy (price table $1565E, health := 15).
+@006404 mechanic_phrase
+;; Chooses the phrase category ($B60C) from the selected part's health and $B656 and prints it.
+@008AE4 mode_race
+;; game_mode $18: the race loop (both modes). Per frame: physics, bots, objects, HUD, collisions.
+@009788 controls_model
+;; Throttle ($C738), brake ($C73A, rate by brake tier) and handlebar ($C73C, rate by frame tier) model.
+@009B40 speed_model
+;; Speed ($FF064A) update: engine tier multiplier, oil/muffler acceleration bonus, drag.
+@00A44C lateral_model
+;; Lateral slip $FF0614 from steering, speed and tire tier.
+@00AC0E player_crash_damage
+;; Player thrown off: frame -3, engine -1, brake -2, muffler -2 (once per fall via $FFC896).
+@00B8A2 mode_race_finished
+@00BD48 race_failure_messages
+;; Prints "YOUR ENGINE IS BURNED UP" etc. when a part health is negative.
+@0084C2 rng
+;; 32-bit LCG state in $FF0502 (x41 mixing); returns a 16-bit value in D0.
+@008D84 rival_times
+;; 7 BCD longs: base lap time per rival (1:50, 1:46, 1:30, 1:32, 1:21, 1:17, 1:13), then jitter table. Used by the rival-time builder at $8DB0.
+@00D482 bot_update
+@00C7BE static_object_update
+@0045CE roadside_spawn_step
+@008D52 crash_trigger
+;; Per-object update: collision with the rider ($10 vs $120 centre, width table $D3F0): frame -1, muffler -1.
+@00468E traffic_manager
+;; Per frame: sorts the on-screen bots, applies bot-vs-bot blocking (+$3A bits), runs the road-shape lookahead ($FF0672 stream -> $FF0676 next / $FF067E current state, $FF0682 radius) and the bot spawn countdown.
+@0048BE bot_spawn
+;; Takes the first free bot slot (5 slots, fixed lane each), sets +$A to the average bot speed, palette $2000/$4000.
+@00F956 bot_grid_setup
+;; Start grid: 5 bots, per rival depth +$26 and lane (+$2A, +$8) from $F9A2 (lanes -180,-90,0,90,180).
+@009652 race_timer_tick
+;; Per frame. Arcade: counts the TIME-left seconds down ($FF0554, sbcd) and the elapsed section time up ($FF0558 sec / $FF0559 hundredths, both BCD) from a 30-tick-per-second counter ($FF0557); Original mode: lap time at $C82E via sub_0096AE.
+@00E5F6 checkpoint_handler
+;; Runs when the checkpoint gate flag $FF06B4 goes negative: records the section time (sub_00E718/$E770), then either ends the course/race ($1C) or adds bonus time and restarts the section timer at $E6A6. Arcade bug: $E6A6 clears $FF0558 but not the tick counter $FF0557.

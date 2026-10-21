@@ -1,0 +1,1 @@
+300:start,600:start,900:start,1200:start,1500:start,1800:start,2100:start,2400:c:6000,2500:right:150,3000:left:150,3500:right:200,4000:a:50,5000:left:300,6000:right:300,7000:start

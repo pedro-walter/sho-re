@@ -1,0 +1,12 @@
+# copyrighted game data and anything derived from it
+*.md
+!docs/*.md
+!README.md
+!CLAUDE.md
+*.bin
+*.gen
+*.smd
+out/
+disasm/sho.asm
+disasm/sho.asm.*
+__pycache__/

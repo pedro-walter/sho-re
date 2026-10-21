@@ -1,0 +1,21 @@
+# Genesis hardware registers: ADDR name description   (symbolised in every operand)
+A04000 YM_A0 YM2612 address port 0 (FM1-3)
+A04001 YM_D0 YM2612 data port 0
+A04002 YM_A1 YM2612 address port 1 (FM4-6)
+A04003 YM_D1 YM2612 data port 1
+A10001 IO_VERSION version register (region, PAL/NTSC, disk)
+A10003 IO_DATA1 controller port 1 data
+A10005 IO_DATA2 controller port 2 data
+A10007 IO_DATAX expansion port data
+A10009 IO_CTRL1 controller port 1 direction
+A1000B IO_CTRL2 controller port 2 direction
+A1000D IO_CTRLX expansion port direction
+A11100 Z80_BUSREQ Z80 bus request (write $100 = request, read bit0 = 0 when granted)
+A11200 Z80_RESET Z80 reset (write 0 = reset, $100 = run)
+A14000 TMSS_SEGA TMSS 'SEGA' unlock
+C00000 VDP_DATA VDP data port
+C00002 VDP_DATA2 VDP data port (mirror)
+C00004 VDP_CTRL VDP control port / status
+C00006 VDP_CTRL2 VDP control port (mirror)
+C00008 VDP_HV VDP HV counter
+C00011 PSG SN76489 PSG port
