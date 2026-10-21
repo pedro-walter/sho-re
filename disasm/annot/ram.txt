@@ -22,7 +22,6 @@ FFC898 retire_flag [w] race is being retired (frame/engine/tire failed)
 FFC832 race_time [l] player race time BCD 00 MM SS CC
 FFC83A rival_time [l] rival race time BCD
 FF0502 rng_state [l] 32-bit state of the LCG used by sub_0084C2 (returns 16 bits in D0)
-FF0614 lateral_slip [w] signed lateral slip/drift of the bike; |x|>$12C = skidding
 FF064A speed [l] bike speed (units: km/h-ish x ~$100?)
 FF066A skid_flag [w]
 FF063A steer_out [w] steering output derived from handlebar position
@@ -63,7 +62,7 @@ FFB652 hp_tire [w]
 FFB655 race_flags [b] bit0 shop visited since race, bit1 race just finished
 FFB656 mech_roll [w] last mechanic roll (non-zero = +1 repair round)
 FFB658 password_chars [32] password characters
-FF0614 lateral_slip [w] (really the rider's lateral position on the road, 0 = centre; also called slip). Note: FF0616 is the 32-bit lap-distance counter's word used as "dist" (2048 per lap)
+FF0614 lateral_pos [w] signed lateral position of the bike on the road (0 = centre; negative = right on screen). |x|>$12C sets skid_flag. Note: FF0616 is the 32-bit lap-distance counter's word used as "dist" (2048 per lap)
 FF0646 dist_gain [l] distance added this frame = 269 * speed * (radius + side/40) / radius in curves
 FF0672 road_ptr [l] pointer into the road-shape stream (start, radius, state 1/2/3 per 6 bytes)
 FF0676 road_next_state [w] state of the segment 40 units ahead (lookahead)
