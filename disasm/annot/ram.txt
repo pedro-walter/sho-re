@@ -21,7 +21,7 @@ FFC896 wear_done_flag [w] set once the crash wear has been applied for the curre
 FFC898 retire_flag [w] race is being retired (frame/engine/tire failed)
 FFC832 race_time [l] player race time BCD 00 MM SS CC
 FFC83A rival_time [l] rival race time BCD
-FF0502 rng_state [l] 32-bit state of the LCG used by sub_0084C2 (returns 16 bits in D0)
+FF0502 rng_state [l] 32-bit state of the LCG used by sub_0084C2 (returns 16 bits in D0); docs/07-rng.md; never seeded in Original mode
 FF064A speed [l] bike speed (units: km/h-ish x ~$100?)
 FF066A skid_flag [w]
 FF063A steer_out [w] steering output derived from handlebar position

@@ -13,6 +13,7 @@ Status legend: [ ] open, [~] partial, [x] answered (answers go in the numbered d
 - [x] Known bug: lap-time hundredths carry into the next section in Arcade mode -> doc 06 (sub-second tick counter $FF0557 is not cleared at a checkpoint; tested 14-byte fix)
 - [x] Why is driving close to the inside of a corner faster? -> doc 02 §8 (distance gain scaled by (radius + side/40)/radius)
 - [x] Bot behaviour: random or fixed? -> doc 02 §7 (5 fixed lanes filled left to right, random timing, per-lap speed/count)
+- [x] How the random number generator works and how the mechanic roll (+1/-1 on parts) is decided -> doc 07 (LCG at $FF0502, no entropy source, state advanced by bot events)
 
 ## Later (added by the user)
 
