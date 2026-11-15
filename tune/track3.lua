@@ -1,6 +1,7 @@
 -- Track 3, tire 0: tunable plan (copy of the search result plan_track3_s0.lua). Run it with:
---   tools/lap.sh scripts/plan_track3_tune.lua 3 0 my_try1     (about 40 s, writes out/video/my_try1.mp4 and prints the per-turn table)
+--   tools/lap.sh tune/track3.lua my_try1     (about 40 s, writes out/video/my_try1.mp4 and prints the per-turn table)
 -- Keys are the curve start distances (turn number in the comment). Fields per curve:
+--   (params: run settings read by lap.sh; track and tire are required, the rest are defaults.)
 --   vt    planned speed at the curve start (raw units; HUD km/h = raw*1.1625). Higher = brakes later / carries more speed in.
 --   a     how far toward the inside edge the bike is at the curve start (1.0 = edge at 240; 0.5 = halfway). Pressing starts to reach it.
 --   ine   (optional) inside-edge target, default 240; up to 290 goes over the road edge line (270).
@@ -10,6 +11,13 @@
 --   send  (optional) gentle curves only: distance units before the end where the push really stops.
 --   vexit ignored by the autopilot (planner leftover).
 return {
+  params = {                                      -- read by tools/lap.sh
+    track = 3,  tire = 0,  laps = 1,                 -- which track (1-3) and tire tier (0-4) to drive, and how many laps to render
+    gent = 80,   gfade = 40,                          -- radius from which a curve is steered gently (proportional), and frames over which that steering fades at its end
+    lead = 40,   rel = 20,   marg = 0,                -- defaults for the per-curve lead / rel / marg below
+    br = 0.35,   tpre = 150, duty = 1.0, engine = 0,  -- braking factor, steering pre-press frames, press duty cycle, engine tier
+    script = "autolap5.lua",                          -- controller script
+  },
   [116] = {  vt = 999, a = 1,    lead = 85, marg = 0,  rel = 20 },  -- T1
   [385] = {  vt = 999, a = 1,    lead = 0,  marg = 0,  rel = 0 },  -- T2
   [670] = {  vt = 154, a = 1,    lead = 0,  marg = 0,  rel = 0 },  -- T3

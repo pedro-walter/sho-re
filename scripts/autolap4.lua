@@ -212,7 +212,7 @@ L.run{ frames = tonumber(os.getenv("SHO_FRAMES") or 26000), input = input, on_fr
   local lat, st, v, s = L.s16(0xFF0614), L.u16(0xFF067E), L.u16(0xFF064A), L.s16(0xFF063A)
   local d = L.u16(0xFF0616) % 2048
   local lap = L.u16(0xFF060A)
-  if lap ~= lastlap then print(string.format("%s LAP %d->%d at k=%d (%.2f s) lap_frames=%d", TAG, lastlap, lap, k, k/60, k - lapstart)); lastlap = lap; lapstart = k; if os.getenv("SHO_ONELAP") and lap >= 1 then manager.machine:exit() end end
+  if lap ~= lastlap then print(string.format("%s LAP %d->%d at k=%d (%.2f s) lap_frames=%d", TAG, lastlap, lap, k, k/60, k - lapstart)); lastlap = lap; lapstart = k; lapsdone = (lapsdone or 0) + 1; if os.getenv("SHO_ONELAP") and lapsdone >= (tonumber(os.getenv("SHO_ONELAP")) or 1) then manager.machine:exit() end end
   if v > maxv then maxv = v end
   sumv = sumv + v; nv = nv + 1
   if L.u16(0xFF066A) ~= 0 then skidf = skidf + 1 end

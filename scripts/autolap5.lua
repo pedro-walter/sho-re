@@ -73,6 +73,11 @@ local function load_segs()
     a = a + 6
   end
   for i = 1, #segs do segs[i][4] = (segs[i + 1] and segs[i + 1][1]) or 2048 end
+  -- plan field ext: the drawn-road curvature (the real push, D) can outlast the physical curve list; treat the curve as lasting ext more distance units
+  for i = 1, #segs - 1 do
+    local pl = plan and plan[segs[i][1]]
+    if pl and pl.ext and segs[i][3] ~= 1 and segs[i + 1][3] == 1 then segs[i][4] = segs[i][4] + pl.ext; segs[i + 1][1] = segs[i + 1][1] + pl.ext end
+  end
   for i = 1, #segs do segs[i].head = (segs[i][3] ~= 1) and (i == 1 or segs[i - 1][3] == 1) end
   local tn = 0
   for i = 1, #segs do if segs[i][3] ~= 1 then tn = tn + 1; segs[i].tn = tn; print(string.format("%s TURN %d start=%d len=%d dir=%s r=%d", TAG, tn, segs[i][1], segs[i][4] - segs[i][1], segs[i][3] == 2 and "R" or "L", segs[i][2])) end end
@@ -212,7 +217,7 @@ L.run{ frames = tonumber(os.getenv("SHO_FRAMES") or 26000), input = input, on_fr
   local lat, st, v, s = L.s16(0xFF0614), L.u16(0xFF067E), L.u16(0xFF064A), L.s16(0xFF063A)
   local d = L.u16(0xFF0616) % 2048
   local lap = L.u16(0xFF060A)
-  if lap ~= lastlap then print(string.format("%s LAP %d->%d at k=%d (%.2f s) lap_frames=%d", TAG, lastlap, lap, k, k/60, k - lapstart)); lastlap = lap; lapstart = k; if os.getenv("SHO_ONELAP") and lap >= 1 then manager.machine:exit() end end
+  if lap ~= lastlap then print(string.format("%s LAP %d->%d at k=%d (%.2f s) lap_frames=%d", TAG, lastlap, lap, k, k/60, k - lapstart)); lastlap = lap; lapstart = k; lapsdone = (lapsdone or 0) + 1; if os.getenv("SHO_ONELAP") and lapsdone >= (tonumber(os.getenv("SHO_ONELAP")) or 1) then manager.machine:exit() end end
   if v > maxv then maxv = v end
   sumv = sumv + v; nv = nv + 1
   if L.u16(0xFF066A) ~= 0 then skidf = skidf + 1 end
@@ -330,5 +335,5 @@ L.run{ frames = tonumber(os.getenv("SHO_FRAMES") or 26000), input = input, on_fr
   if os.getenv("SHO_SNAP") and k % tonumber(os.getenv("SHO_SNAP")) == 0 then L.snapshot(string.format("rec/%s_%05d.png", TAG, k)); print(string.format("REC %d %d %d %d %d %d %d %d %d %d", k, d, cur.tn or 0, cur[3], cur[2], lat, v, L.u16(0xFF066A) ~= 0 and 1 or 0, nxt.tn or 0, dnext)) end
   if want_a then brakef = brakef + 1 end
   L.pad(pd)
-  if LOG > 0 and k % LOG == 0 then print(string.format("%s T k=%d d=%d lap=%d st=%d r=%d lat=%d tgt=%d s=%d sd=%d v=%d skid=%d pm=%s push=%.1f %s%s", TAG, k, d, lap, st, cur[2], lat, target, s, math.floor(sd), v, L.u16(0xFF066A), pm and string.format("%.1f", pm) or "-", push, want_a and "A" or "-", want_b and "B" or "-")) end
+  if LOG > 0 and k % LOG == 0 then print(string.format("%s T k=%d d=%d lap=%d st=%d r=%d lat=%d tgt=%d s=%d sd=%d v=%d skid=%d pm=%s push=%.1f D=%d %s%s", TAG, k, d, lap, st, cur[2], lat, target, s, math.floor(sd), v, L.u16(0xFF066A), pm and string.format("%.1f", pm) or "-", push, L.s16(0xFF0BA6) - L.s16(0xFF0CB8), want_a and "A" or "-", want_b and "B" or "-")) end
 end }
