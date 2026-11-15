@@ -43,6 +43,8 @@ def render(i):
     dr.ellipse((x-7, by-7, x+7, by+7), fill=(80, 255, 120))
     im.save(f'{tmp}/f_{i:05d}.png')
 if __name__ == '__main__':
+    for f in os.listdir(tmp):
+        if f.startswith('f_') and f.endswith('.png'): os.remove(os.path.join(tmp, f))
     with Pool(6) as p: p.map(render, range(len(recs)), chunksize=50)
     subprocess.run(['ffmpeg', '-y', '-loglevel', 'error', '-framerate', str(fps), '-i', f'{tmp}/f_%05d.png', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '20', out], check=True)
     print('wrote', out, len(recs), 'frames')

@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Per-turn statistics from an autolap run logged with SHO_LOG=3. Usage: tools/turnstats.py LOG [OFF]"""
 import re, sys
-turns = [(116,385,1),(385,670,2),(670,743,3),(743,851,4),(979,1082,5),(1232,1335,6),(1411,1478,7),(1478,1549,8),(1549,1659,9),(1659,1810,10),(1810,1933,11)]  # track 3
+turns = []
+_t = [(int(m.group(1)), int(m.group(2))) for m in (re.search(r'TURN \d+ start=(\d+) len=(\d+)', l) for l in open(sys.argv[1])) if m]
+for _i, (_s, _l) in enumerate(_t): turns.append((_s, _t[_i+1][0] if _i+1 < len(_t) else 2048, _i+1))
 OFF = int(sys.argv[2]) if len(sys.argv) > 2 else 270
 rows = []
 for ln in open(sys.argv[1]):

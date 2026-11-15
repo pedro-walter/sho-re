@@ -6,8 +6,8 @@ TIRE, START, OUT, ROUNDS = int(sys.argv[1]), sys.argv[2], sys.argv[3], int(sys.a
 TRACK = int(os.environ.get('TRACK', 3)); SEED = int(os.environ.get('SEED', 0))
 PAR = int(os.environ.get('PAR', 8))
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-STEP = {'vt': 8, 'lead': 15, 'marg': 10, 'rel': 10}
-LIM = {'vt': (40, 241), 'lead': (0, 140), 'marg': (0, 80), 'rel': (0, 60)}
+STEP = {'vt': 8, 'lead': 15, 'marg': 10, 'rel': 10, 'ine': 15, 'a': 0.1, 'send': 15}
+LIM = {'vt': (40, 241), 'lead': (0, 140), 'marg': (0, 80), 'rel': (0, 60), 'ine': (180, 290), 'a': (0.5, 1.2), 'send': (0, 140)}
 def parse(path):
     plan = {}
     for m in re.finditer(r'\[(\d+)\] = \{([^}]*)\}', open(path).read()):
@@ -25,9 +25,9 @@ def write(plan, path):
 def evaluate(plan, tag):
     pf = f'out/plans/w{TRACK}_{TIRE}_{SEED}_{tag}.lua'; write(plan, os.path.join(ROOT, pf))
     log = f'/tmp/w{TRACK}_{TIRE}_{SEED}_{tag}.txt'
-    env = dict(os.environ, SHO_ROOT=ROOT, SHO_ONELAP='1', SHO_GENT='90', SHO_GFADE='40', SHO_NOBOTS='1', SHO_NOCHAIN='1', SHO_PLAN=pf, SHO_LEAD='40', SHO_BR='0.35',
+    env = dict(os.environ, SHO_ROOT=ROOT, SHO_ONELAP='1', SHO_GENT=os.environ.get('GENT','80'), SHO_GFADE='40', SHO_NOBOTS='1', SHO_NOCHAIN='1', SHO_PLAN=pf, SHO_LEAD='40', SHO_BR='0.35',
                SHO_LOADSTATE=f'race{TRACK}', SHO_REL='20', SHO_MARG='0', SHO_TPRE='150', SHO_DUTY='1.0', SHO_RIVAL=str(TRACK - 1), SHO_TIRE=str(TIRE), SHO_ENGINE='0', SHO_LOG='3', SHO_FRAMES='11000', SHO_TAG='s')
-    with open(log, 'w') as lf: subprocess.run(['tools/mame.sh', 'scripts/autolap4.lua'], cwd=ROOT, env=env, stdout=lf, stderr=subprocess.STDOUT)
+    with open(log, 'w') as lf: subprocess.run(['tools/mame.sh', 'scripts/' + os.environ.get('SCRIPT', 'autolap4.lua')], cwd=ROOT, env=env, stdout=lf, stderr=subprocess.STDOUT)
     lap = None; skid = off = 0; dmax = 0
     for ln in open(log):
         m = re.search(r'LAP 0->1 at k=(\d+)', ln)
@@ -38,8 +38,8 @@ def evaluate(plan, tag):
         if m:
             if int(m.group(2)): skid += 3
             if abs(int(m.group(1))) > 270: off += 3
-    if lap is None: return 200 + 0.03 * skid + 0.006 * off + (2048 - dmax) * 0.05, ('DNF', skid, off, dmax)
-    return lap / 60 + 0.03 * skid + 0.006 * off, (lap / 60, skid, off)
+    if lap is None: return 200 + 0.015 * skid + 0.003 * off + (2048 - dmax) * 0.05, ('DNF', skid, off, dmax)
+    return lap / 60 + 0.015 * skid + 0.003 * off, (lap / 60, skid, off)
 plan = parse(START)
 best, info = evaluate(plan, 'base')
 print('start', best, info, flush=True)
@@ -48,10 +48,10 @@ curves = sorted(plan)
 for r in range(ROUNDS):
     cands = []
     for _ in range(PAR):
-        c = random.choice(curves); k = random.choice(['vt', 'vt', 'lead', 'marg', 'rel'])
+        c = random.choice(curves); k = random.choice(['vt', 'vt', 'lead', 'marg', 'rel', 'ine', 'a', 'send'])
         n = json.loads(json.dumps({str(a): b for a, b in plan.items()})); n = {int(a): b for a, b in n.items()}
         step = STEP[k] * random.choice([-2, -1, 1, 1, 2]) 
-        lo, hi = LIM[k]; n[c][k] = min(hi, max(lo, n[c].get(k, 0) + step))
+        lo, hi = LIM[k]; n[c][k] = min(hi, max(lo, n[c].get(k, 240 if k == 'ine' else 1.0 if k == 'a' else 0) + step))
         cands.append((c, k, n))
     with cf.ThreadPoolExecutor(PAR) as ex: res = list(ex.map(lambda a: evaluate(a[1][2], f'{a[0]}'), enumerate(cands)))
     i = min(range(PAR), key=lambda j: res[j][0])

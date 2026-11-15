@@ -39,6 +39,8 @@ local NOCHAIN = os.getenv("SHO_NOCHAIN") ~= nil          -- per-curve entry limi
 local PLANF = os.getenv("SHO_PLAN")
 local GENT = tonumber(os.getenv("SHO_GENT") or 0)
 local GFADE = tonumber(os.getenv("SHO_GFADE") or 70)
+local MEAS = os.getenv("SHO_MEAS") ~= nil
+local hist, pe = {}, nil
 local NOBOTS = os.getenv("SHO_NOBOTS") ~= nil
 local plan = PLANF and dofile(PLANF) or nil
 local LEAD = tonumber(os.getenv("SHO_LEAD") or 40)      -- frames before a curve ends at which the lock switches to the next (opposite) curve
@@ -228,11 +230,25 @@ L.run{ frames = tonumber(os.getenv("SHO_FRAMES") or 26000), input = input, on_fr
   local remain = cur[4] - d
   local tpre = DPF * math.max(v, 60) * TPRE           -- distance covered while the handlebar ramps up
   local fulllock = nil
+  -- measured push: lateral velocity over 6 frames plus the steering effect (lat_vel = push - s*Gv/127)
+  hist[#hist + 1] = { lat, s, i, L.u16(0xFF066A) ~= 0 }
+  if #hist > 7 then table.remove(hist, 1) end
+  local pm = nil
+  if #hist == 7 and math.abs(lat) < 480 then
+    local ok, sm = true, 0
+    for q = 1, 7 do if hist[q][3] ~= i or hist[q][4] then ok = false end; if q > 1 then sm = sm + hist[q][2] end end
+    if ok then pm = (lat - hist[1][1]) / 6 + (sm / 6) * (G * ((v > 127) and 1 or math.max(v, 20) / 128)) / 127 end
+  end
   local cdirc = nil
   if cur[3] ~= 1 then
     local ps = (cur[3] == 2) and 1 or -1          -- push sign; outward offset u = ps*lat
     local u = ps * lat
     push = spush(cur)
+    if MEAS and pm and cur[2] >= GENT then
+      local mag = math.max(0, math.min(math.abs(push) * 1.05, (cur[3] == 2) and pm or -pm))
+      pe = pe and (0.85 * pe + 0.15 * mag) or mag
+      push = ((cur[3] == 2) and 1 or -1) * pe
+    elseif not pm then pe = nil end
     local cdir = ps
     local pl = plan and plan[cur[1]]
     local inwin = false
@@ -241,21 +257,23 @@ L.run{ frames = tonumber(os.getenv("SHO_FRAMES") or 26000), input = input, on_fr
       if inwin and nxt[3] ~= cur[3] then cdir = -ps end
     elseif nxt[3] ~= 1 and nxt[3] ~= cur[3] and remain < DPF * math.max(v, 60) * LEAD then cdir = -ps end
     cdirc = cdir
-    target = -cdir * INE
+    local INEc = (pl and pl.ine) or INE
+    target = -cdir * INEc
     if GENT > 0 and cur[2] >= GENT and nxt[3] == 1 then
-      local f = math.min(1, remain / (DPF * math.max(v, 60) * GFADE))
+      local f = math.max(0, math.min(1, (remain - ((pl and pl.send) or 0)) / (DPF * math.max(v, 60) * GFADE)))
       push = push * f; target = target * (0.3 + 0.7 * f)
     end
     if u > OUT - 5 and not plan then want_slow = true end
     if u > OFF - 5 and plan then want_slow = true end
-    if (inwin or cdir * lat > -(INE - 15)) and not (GENT > 0 and cur[2] >= GENT and cdir == ps) then fulllock = cdir end
+    if (inwin or cdir * lat > -(INEc - 15)) and not (GENT > 0 and cur[2] >= GENT and cdir == ps) then fulllock = cdir end
   else
     if nxt[3] ~= 1 and dnext < tpre then
       local psn = (nxt[3] == 2) and 1 or -1
       local pln = plan and plan[nxt[1]]
       local an = pln and pln.a or 1
-      local delta = psn * lat + INE * an
-      target = inside_sign(nxt[3]) * INE
+      local INEn = (pln and pln.ine) or INE
+      local delta = psn * lat + INEn * an
+      target = inside_sign(nxt[3]) * INEn
       if delta >= MINDELTA then
         local h0 = (psn == 1) and (128 - L.u16(0xFFC73C)) or (L.u16(0xFFC73C) - 128)
         local nn = frames_needed(delta, h0, G)
@@ -267,7 +285,7 @@ L.run{ frames = tonumber(os.getenv("SHO_FRAMES") or 26000), input = input, on_fr
       elseif dnext < DPF * math.max(v, 60) * PL then push = spush(nxt) end
     end
     if pressing and not (nxt[3] ~= 1 and dnext < tpre) then pressing = nil end
-    if pressing and pressing * lat < -(INE + 20) then pressing = nil end   -- reached the edge early: hold there instead
+    if pressing and pressing * lat < -(((plan and plan[nxt[1]] and plan[nxt[1]].ine) or INE) + 20) then pressing = nil end   -- reached the edge early: hold there instead
   end
   if cur[3] ~= 1 then pressing = nil end
   local Gv0 = G
@@ -312,5 +330,5 @@ L.run{ frames = tonumber(os.getenv("SHO_FRAMES") or 26000), input = input, on_fr
   if os.getenv("SHO_SNAP") and k % tonumber(os.getenv("SHO_SNAP")) == 0 then L.snapshot(string.format("rec/%s_%05d.png", TAG, k)); print(string.format("REC %d %d %d %d %d %d %d %d %d %d", k, d, cur.tn or 0, cur[3], cur[2], lat, v, L.u16(0xFF066A) ~= 0 and 1 or 0, nxt.tn or 0, dnext)) end
   if want_a then brakef = brakef + 1 end
   L.pad(pd)
-  if LOG > 0 and k % LOG == 0 then print(string.format("%s T k=%d d=%d lap=%d st=%d r=%d lat=%d tgt=%d s=%d sd=%d v=%d skid=%d %s%s", TAG, k, d, lap, st, cur[2], lat, target, s, math.floor(sd), v, L.u16(0xFF066A), want_a and "A" or "-", want_b and "B" or "-")) end
+  if LOG > 0 and k % LOG == 0 then print(string.format("%s T k=%d d=%d lap=%d st=%d r=%d lat=%d tgt=%d s=%d sd=%d v=%d skid=%d pm=%s push=%.1f %s%s", TAG, k, d, lap, st, cur[2], lat, target, s, math.floor(sd), v, L.u16(0xFF066A), pm and string.format("%.1f", pm) or "-", push, want_a and "A" or "-", want_b and "B" or "-")) end
 end }

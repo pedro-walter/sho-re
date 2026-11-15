@@ -1,0 +1,17 @@
+return {
+  [104] = { vt = 241, a = 1.1, lead = 0, marg = 0, rel = 20, send = 15 },
+  [251] = { vt = 183, a = 1, lead = 0, marg = 0, rel = 20 },
+  [378] = { vt = 219, a = 1, lead = 0, marg = 0, rel = 20 },
+  [532] = { vt = 241, a = 1, lead = 55, marg = 0, rel = 20 },
+  [600] = { vt = 188, a = 1, lead = 0, marg = 0, rel = 20 },
+  [639] = { vt = 186, a = 1, lead = 0, marg = 0, rel = 20 },
+  [861] = { vt = 241, a = 1.1, lead = 55, marg = 0, rel = 20 },
+  [961] = { vt = 225, a = 1, lead = 85, marg = 0, rel = 20 },
+  [1020] = { vt = 196, a = 1, lead = 0, marg = 0, rel = 20 },
+  [1128] = { vt = 241, a = 1, lead = 100, marg = 0, rel = 20 },
+  [1250] = { vt = 241, a = 1, lead = 0, marg = 0, rel = 20 },
+  [1320] = { vt = 241, a = 1, lead = 0, marg = 0, rel = 20, ine = 255, send = 15 },
+  [1581] = { vt = 218, a = 1, lead = 0, marg = 0, rel = 20 },
+  [1625] = { vt = 241, a = 1, lead = 0, marg = 0, rel = 20, ine = 180 },
+  [1836] = { send = 108, vt = 241, a = 1, lead = 0, marg = 10, rel = 20, ine = 270 },
+}
