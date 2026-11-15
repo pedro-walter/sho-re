@@ -18,7 +18,7 @@ L.run{ frames = tonumber(os.getenv("SHO_FRAMES") or 5600), input = input, on_fra
   local k = f - t0
   if os.getenv("SHO_V0") and k == 60 then L.mem:write_u16(0xFF064A, tonumber(os.getenv("SHO_V0"))) end
   L.pad({ b = true, c = os.getenv("SHO_TURBO") ~= nil })
-  if k % (tonumber(os.getenv("SHO_STEP") or 30)) == 0 and k <= 900 then
+  if k % (tonumber(os.getenv("SHO_STEP") or 30)) == 0 and k <= tonumber(os.getenv("SHO_LOGMAX") or 900) then
     print(string.format("AC e=%d o=%d m=%d k=%d speed=%d dist=%d thr=%d tgt=%d", e, o, m, k, L.u16(0xFF064A), L.u16(0xFF0616), L.u16(0xFF063E), L.u16(0xFFC73E)))
   end
 end }
