@@ -15,7 +15,10 @@ return {
     track = 3,  tire = 0,  laps = 1,                 -- which track (1-3) and tire tier (0-4) to drive, and how many laps to render
     gent = 80,   gfade = 40,                          -- radius from which a curve is steered gently (proportional), and frames over which that steering fades at its end
     lead = 40,   rel = 20,   marg = 0,                -- defaults for the per-curve lead / rel / marg below
-    br = 0.35,   tpre = 150, duty = 1.0, engine = 0,  -- braking factor, steering pre-press frames, press duty cycle, engine tier
+    br = 0.35,   tpre = 150, duty = 1.0,              -- braking factor, steering pre-press frames, press duty cycle
+    frame = 0,   engine = 0, brake = 0,  muffler = 0, oil = 0,   -- part tiers (tire is above): frame 0-5, engine 0-5, brake 0-4, muffler 0-3, oil 0-3, tire 0-4
+    start_kmh = 0,                                    -- speed at the start of the first lap in HUD km/h: 0 = standing start, 280 = full speed
+    bmargin = 1.25,                                   -- safety factor on the braking distance (the controller learns the real brake deceleration while it drives): 1 = brake as late as the model allows
     script = "autolap5.lua",                          -- controller script
   },
   [116] =  { vt = 225, a = 1,    lead = 85, marg = 0,  rel = 20 },  -- T1

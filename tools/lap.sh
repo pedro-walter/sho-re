@@ -9,7 +9,7 @@ PLAN=$1; NAME=$2
 export SHO_ROOT=$PWD
 PARAMS=$(python3 - "$PLAN" <<'PY'
 import re, sys
-D = dict(track=None, tire=None, laps=1, script='autolap5.lua', gent=80, gfade=40, lead=40, br=0.35, tpre=150, duty=1.0, rel=20, marg=0, engine=0)
+D = dict(track=None, tire=None, laps=1, script='autolap5.lua', gent=80, gfade=40, lead=40, br=0.35, tpre=150, duty=1.0, rel=20, marg=0, engine=0, frame=0, brake=0, muffler=0, oil=0, start_kmh=0, bmargin=1.25)
 txt = re.sub(r'--[^\n]*', '', open(sys.argv[1]).read())
 m = re.search(r'params\s*=\s*\{(.*?)\}', txt, re.S)
 if m:
@@ -22,7 +22,7 @@ for k, v in D.items(): print(f'P_{k}={v}')
 PY
 ) || exit 1
 eval "$PARAMS"
-SHO_ONELAP=$P_laps SHO_SNAP=3 SHO_GENT=$P_gent SHO_GFADE=$P_gfade SHO_NOBOTS=1 SHO_NOCHAIN=1 SHO_PLAN=$PLAN SHO_LEAD=$P_lead SHO_BR=$P_br SHO_LOADSTATE=race$P_track SHO_REL=$P_rel SHO_MARG=$P_marg SHO_TPRE=$P_tpre SHO_DUTY=$P_duty SHO_RIVAL=$((P_track-1)) SHO_TIRE=$P_tire SHO_ENGINE=$P_engine SHO_LOG=3 SHO_FRAMES=$((11000 * P_laps)) SHO_TAG=$NAME tools/mame.sh scripts/$P_script > /tmp/$NAME.txt 2>&1
+SHO_STARTV=$(awk -v k=$P_start_kmh 'BEGIN{printf "%d", k/1.1625+0.5}') SHO_ONELAP=$P_laps SHO_SNAP=3 SHO_GENT=$P_gent SHO_GFADE=$P_gfade SHO_NOBOTS=1 SHO_NOCHAIN=1 SHO_PLAN=$PLAN SHO_LEAD=$P_lead SHO_BMARG=$P_bmargin SHO_BR=$P_br SHO_LOADSTATE=race$P_track SHO_REL=$P_rel SHO_MARG=$P_marg SHO_TPRE=$P_tpre SHO_DUTY=$P_duty SHO_RIVAL=$((P_track-1)) SHO_TIRE=$P_tire SHO_ENGINE=$P_engine SHO_FRAME=$P_frame SHO_BRAKET=$P_brake SHO_MUFFLER=$P_muffler SHO_OIL=$P_oil SHO_LOG=3 SHO_FRAMES=$((11000 * P_laps)) SHO_TAG=$NAME tools/mame.sh scripts/$P_script > /tmp/$NAME.txt 2>&1
 grep "LAP " /tmp/$NAME.txt
 python3 tools/turnstats.py /tmp/$NAME.txt
 python3 tools/mkvideo.py /tmp/$NAME.txt $NAME out/video/$NAME.mp4 20 | tail -n 1

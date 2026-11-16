@@ -57,9 +57,14 @@ local VMAX = tonumber(os.getenv("SHO_VMAX") or ((E >= 3 and os.getenv("SHO_TURBO
 local TIREADJ = { 32, 20, 8, -4, -16 }
 local G = 8.0 * 160 / (128 + TIREADJ[T + 1])
 local DPF = 0.001335            -- distance units per frame per unit of speed
-local BRAKE = 0.95              -- speed units per frame with A held
+local BRK, BRKW = 0.95, 20       -- braking deceleration (speed units per frame with A held): starts here, then learned from every real braking run (BRKW = weight of the estimate, in frames)
+local TRANS = tonumber(os.getenv("SHO_TRANS") or 5)   -- distance units before a curve boundary at which the real (drawn-road) push already follows the next curve
+local BRKLEARN = os.getenv("SHO_BRKLEARN") ~= "0"   -- learn the brake deceleration online (0: keep the fixed initial value)
+local BMARG = tonumber(os.getenv("SHO_BMARG") or 1.25)   -- safety factor on the braking distance
+local swseg, swlatch = nil, false   -- auto lock-switch state: curve segment and whether the switch to the next (opposite) curve has started
+local brk_on, brk_v0, brk_n = false, 0, 0
 
-local vlim, push_mag, frames_needed, chain_entry
+local vlim, push_mag, frames_needed, chain_entry, wait_ok
 local pressing = nil
 local segs = nil                -- {start, r, st, stop}
 local function load_segs()
@@ -175,12 +180,48 @@ function chain_entry(i0)
   sg.ce = (best >= 241) and 999 or best
   return sg.ce
 end
+-- Would the bike still reach the next (opposite) curve's entry position if it keeps the current curve's lock for `delay` more frames and then reverses?
+-- Simulates the handlebar (ramp 1/frame, 2/frame when reversing, dead zone |h|<=20) and the lateral position q (offset toward the next curve's OUTSIDE) until the current curve ends.
+-- Success: q <= -inside*INE (entry position reached) and the handlebar is out of the dead zone (steering inward) when this curve ends.
+function wait_ok(cur, nxt, pl, lat, v, remain, delay)
+  local psn = (nxt[3] == 2) and 1 or -1
+  local pln = plan and plan[nxt[1]]
+  local an = (pln and (pln.inside and pln.inside / 100 or pln.a)) or 1
+  local INEn, INEc = (pln and pln.ine) or INE, (pl and pl.ine) or INE
+  local qt = -INEn * an
+  local m = push_mag(v, cur[2])                 -- this curve's push, as seen from the next curve it moves the bike toward the next inside
+  local mn = push_mag(v, nxt[2])
+  local Gv = Gof(v)
+  local q = psn * lat
+  local h = (psn == 1) and (128 - L.u16(0xFFC73C)) or (L.u16(0xFFC73C) - 128)
+  local x = remain
+  local n = 0
+  local vl = (pln and pln.vt) or 999
+  while x > 0 and n < 400 do
+    n = n + 1
+    -- the speed policy: brake so as to arrive at the next curve with its planned entry speed (the push and the distance covered per frame follow the speed)
+    if v > vl and x < DPF * (v * v - vl * vl) / (2 * BRK) * BMARG + 4 then v = math.max(vl, v - BRK) end
+    m = push_mag(v, cur[2]); mn = push_mag(v, nxt[2]); Gv = Gof(v)
+    local hc
+    if n <= delay then
+      if q >= INEc - 15 or cur[2] >= GENT and GENT > 0 then hc = -math.max(0, math.min(69.4, m * 127 / Gv / 1.83)) else hc = -69.4 end   -- at this curve's inside edge, or in a gentle curve (proportional steering): hold only what balances the push
+    else hc = 69.4 end
+    local dh = hc - h
+    local rate = (h * dh < 0) and 2.0 or 1.0
+    if math.abs(dh) <= rate then h = hc else h = h + (dh > 0 and rate or -rate) end
+    local so = (math.abs(h) <= 20) and 0 or math.max(-127, math.min(127, 1.83 * h))
+    q = q + ((x <= TRANS) and mn or -m) - Gv * so / 127      -- the drawn-road push flips to the next curve TRANS units before the table boundary
+    x = x - DPF * math.max(v, 60)
+  end
+  return q <= qt and h >= 20, q, h, qt
+end
+
 -- time (frames) to cover `dist` units when we cruise at v and brake in time to arrive at vl (the braking envelope of the speed policy)
 local function time_to(dist, v, vl)
   local t, x = 0, 0
   while x < dist do
     local rem = dist - x
-    local venv = math.sqrt(vl * vl + math.max(0, 2 * BRAKE * (rem - 4) / (1.25 * DPF)))
+    local venv = math.sqrt(vl * vl + math.max(0, 2 * BRK * (rem - 4) / (BMARG * DPF)))
     local vx = math.max(60, math.min(v, venv))
     t = t + 1 / (DPF * vx); x = x + 1
   end
@@ -206,13 +247,14 @@ L.run{ frames = tonumber(os.getenv("SHO_FRAMES") or 26000), input = input, on_fr
     if started then print(string.format("%s END frame=%d race_frames=%d skid_frames=%d brake_frames=%d maxv=%d avgv=%d", TAG, f, f - t0, skidf, brakef, maxv, sumv // math.max(nv, 1))); manager.machine:exit() end
     return
   end
-  L.mem:write_u16(0xFFB618, F); L.mem:write_u16(0xFFB61A, E); L.mem:write_u16(0xFFB620, O); L.mem:write_u16(0xFFB622, T)
+  L.mem:write_u16(0xFFB618, F); L.mem:write_u16(0xFFB61A, E); L.mem:write_u16(0xFFB620, O); L.mem:write_u16(0xFFB622, T); L.mem:write_u16(0xFFB61C, tonumber(os.getenv("SHO_BRAKET") or 0)); L.mem:write_u16(0xFFB61E, tonumber(os.getenv("SHO_MUFFLER") or 0))
   for i = 0, 5 do L.mem:write_u16(0xFFB648 + 2*i, 15) end
   if L.u16(0xFF0616) == 0 and not started then return end
   if not started then started = true; load_segs(); if SAVESTATE then manager.machine:save(SAVESTATE); print("SAVED " .. SAVESTATE); end end
   if SAVESTATE and started and f > 0 and (t0 or f) ~= nil and L.frame > (t0 or 0) + 3 then manager.machine:exit() end
   t0 = t0 or f
   local k = f - t0
+  if k <= 2 and os.getenv("SHO_STARTV") and tonumber(os.getenv("SHO_STARTV")) > 0 then L.mem:write_u16(0xFF064A, tonumber(os.getenv("SHO_STARTV"))) end   -- flying start (HUD km/h / 1.1625)
   if STOPK > 0 and k >= STOPK then print(string.format("%s SUM k=%d dist=%d lap=%d skid_frames=%d off_frames=%d brake_frames=%d avgv=%d", TAG, k, L.u16(0xFF0616), L.u16(0xFF060A), skidf, offf, brakef, sumv // math.max(nv, 1))); manager.machine:exit() end
   local lat, st, v, s = L.s16(0xFF0614), L.u16(0xFF067E), L.u16(0xFF064A), L.s16(0xFF063A)
   local d = L.u16(0xFF0616) % 2048
@@ -257,8 +299,21 @@ L.run{ frames = tonumber(os.getenv("SHO_FRAMES") or 26000), input = input, on_fr
     local cdir = ps
     local pl = plan and plan[cur[1]]
     local inwin = false
-    if pl and nxt[3] ~= 1 then
-      inwin = remain < DPF * math.max(v, 60) * pl.lead
+    if pl and nxt[3] ~= 1 and pl.lead == nil and nxt[3] ~= cur[3] then
+      -- automatic lock switch: hold this curve's lock as long as reversing LATER still puts the bike at the next curve's entry position (and at full lock) when this curve ends
+      if swseg ~= i then swseg = i; swlatch = false end
+      if not swlatch then
+        local okw, qe, he, qtt = wait_ok(cur, nxt, pl, lat, v, remain, 1)
+        if not okw then
+          swlatch = true
+          local _, q0, h0 = wait_ok(cur, nxt, pl, lat, v, remain, 0)
+          print(string.format("%s SWITCH turn=%s d=%d lat=%d v=%d remain=%.1f pred_q_end(now)=%.0f h=%.0f target=%.0f", TAG, tostring(cur.tn), d, lat, v, remain, q0, h0, qtt))
+        end
+      end
+      inwin = swlatch
+      if inwin then cdir = -ps end
+    elseif pl and nxt[3] ~= 1 then
+      inwin = remain < DPF * math.max(v, 60) * (pl.lead or LEAD)
       if inwin and nxt[3] ~= cur[3] then cdir = -ps end
     elseif nxt[3] ~= 1 and nxt[3] ~= cur[3] and remain < DPF * math.max(v, 60) * LEAD then cdir = -ps end
     cdirc = cdir
@@ -275,7 +330,7 @@ L.run{ frames = tonumber(os.getenv("SHO_FRAMES") or 26000), input = input, on_fr
     if nxt[3] ~= 1 and dnext < tpre then
       local psn = (nxt[3] == 2) and 1 or -1
       local pln = plan and plan[nxt[1]]
-      local an = pln and pln.a or 1
+      local an = (pln and (pln.inside and pln.inside / 100 or pln.a)) or 1
       local INEn = (pln and pln.ine) or INE
       local delta = psn * lat + INEn * an
       target = inside_sign(nxt[3]) * INEn
@@ -315,7 +370,7 @@ L.run{ frames = tonumber(os.getenv("SHO_FRAMES") or 26000), input = input, on_fr
     local pl = plan and plan[sg[1]]
     if not pl and not sg.head and not NOCHAIN then return end
     local vl = pl and pl.vt or (NOCHAIN and vlim(sg, -INE) or chain_entry(sgi))
-    local need = DPF * (v * v - vl * vl) / (2 * BRAKE) * 1.25 + 4
+    local need = DPF * (v * v - vl * vl) / (2 * BRK) * BMARG + 4
     if v > vl and dist_to < need then want_a = true end
     if v >= vl - 4 and dist_to < need + 12 then want_b = false end
   end
@@ -333,7 +388,18 @@ L.run{ frames = tonumber(os.getenv("SHO_FRAMES") or 26000), input = input, on_fr
   pd.a = want_a
   pd.c = os.getenv("SHO_TURBO") ~= nil
   if os.getenv("SHO_SNAP") and k % tonumber(os.getenv("SHO_SNAP")) == 0 then L.snapshot(string.format("rec/%s_%05d.png", TAG, k)); print(string.format("REC %d %d %d %d %d %d %d %d %d %d", k, d, cur.tn or 0, cur[3], cur[2], lat, v, L.u16(0xFF066A) ~= 0 and 1 or 0, nxt.tn or 0, dnext)) end
-  if want_a then brakef = brakef + 1 end
+  if want_a then
+    brakef = brakef + 1
+    if not brk_on then brk_on = true; brk_v0 = v; brk_n = 0 end
+    brk_n = brk_n + 1
+  elseif brk_on then
+    brk_on = false
+    if brk_n >= 8 and BRKLEARN then
+      local dec = math.max(0.3, math.min(3, (brk_v0 - v) / brk_n))
+      BRK = (BRK * BRKW + dec * brk_n) / (BRKW + brk_n); BRKW = math.min(300, BRKW + brk_n)
+      print(string.format("%s BRK run=%d frames %d->%d dec=%.3f estimate=%.3f", TAG, brk_n, brk_v0, v, dec, BRK))
+    end
+  end
   L.pad(pd)
   if LOG > 0 and k % LOG == 0 then print(string.format("%s T k=%d d=%d lap=%d st=%d r=%d lat=%d tgt=%d s=%d sd=%d v=%d skid=%d pm=%s push=%.1f D=%d %s%s", TAG, k, d, lap, st, cur[2], lat, target, s, math.floor(sd), v, L.u16(0xFF066A), pm and string.format("%.1f", pm) or "-", push, L.s16(0xFF0BA6) - L.s16(0xFF0CB8), want_a and "A" or "-", want_b and "B" or "-")) end
 end }

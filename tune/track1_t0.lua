@@ -12,25 +12,28 @@
 --   send  (optional) gentle curves only: distance units before the end where the push really stops.
 return {
   params = {                                      -- read by tools/lap.sh
-    track = 1,  tire = 0,  laps = 1,                 -- which track (1-3) and tire tier (0-4) to drive, and how many laps to render
+    track = 1,  tire = 0,  laps = 2,                 -- which track (1-3) and tire tier (0-4) to drive, and how many laps to render
     gent = 80,   gfade = 40,                          -- radius from which a curve is steered gently (proportional), and frames over which that steering fades at its end
     lead = 40,   rel = 20,   marg = 0,                -- defaults for the per-curve lead / rel / marg below
-    br = 0.35,   tpre = 150, duty = 1.0, engine = 0,  -- braking factor, steering pre-press frames, press duty cycle, engine tier
+    br = 0.35,   tpre = 150, duty = 1.0,              -- braking factor, steering pre-press frames, press duty cycle
+    frame = 0,   engine = 0, brake = 0,  muffler = 0, oil = 0,   -- part tiers (tire is above): frame 0-5, engine 0-5, brake 0-4, muffler 0-3, oil 0-3, tire 0-4
+    start_kmh = 0,                                    -- speed at the start of the first lap in HUD km/h: 0 = standing start, 280 = full speed
+    bmargin = 1.25,                                   -- safety factor on the braking distance (the controller learns the real brake deceleration while it drives): 1 = brake as late as the model allows
     script = "autolap5.lua",                          -- controller script
   },
-  [104] =  { vt = 999, a = 1,   lead = 0,   marg = 0,  rel = 20 },  -- T1
-  [251] =  { vt = 207, a = 1,   lead = 0,   marg = 0,  rel = 0 },  -- T2
-  [378] =  { vt = 999, a = 1,   lead = 0,   marg = 25, rel = 0 },  -- T3
-  [532] =  { vt = 999, a = 1,   lead = 55,  marg = 0,  rel = 20 },  -- T4
-  [600] =  { vt = 192, a = 1,   lead = 0,   marg = 0,  rel = 0 },  -- T5
-  [639] =  { vt = 180, a = 1,   lead = 0,   marg = 0,  rel = 0 },  -- T6
-  [861] =  { vt = 999, a = 1,   lead = 55,  marg = 0,  rel = 20 },  -- T7
-  [961] =  { vt = 999, a = 0.3, lead = 105, marg = 0,  rel = 20 },  -- T8
-  [1020] = { vt = 999, a = 1.1, lead = 0,   marg = 0,  rel = 20 },  -- T9
-  [1128] = { vt = 999, a = 1,   lead = 130, marg = 0,  rel = 20 },  -- T10
-  [1250] = { vt = 999, a = 1.1, lead = 0,   marg = 0,  rel = 20 },  -- T11
-  [1320] = { vt = 999, a = 1,   lead = 0,   marg = 0,  rel = 20, ine = 255, send = 15 },   -- T12
-  [1581] = { vt = 199, a = 1,   lead = 0,   marg = 20, rel = 20 },  -- T13
-  [1625] = { vt = 999, a = 1,   lead = 0,   marg = 0,  rel = 0,  ine = 270, ext = 51 },              -- T14
-  [1836] = { vt = 999, a = 1,   lead = 0,   marg = 10, rel = 20, ine = 270, send = 108 },  -- T15
+  [104] =  { vt = 999, inside = 100, marg = 0,  rel = 20 },  -- T1
+  [251] =  { vt = 207, inside = 100, marg = 0,  rel = 0 },  -- T2
+  [378] =  { vt = 999, inside = 100, marg = 25, rel = 0 },  -- T3
+  [532] =  { vt = 999, inside = 100, marg = 0,  rel = 20 },  -- T4
+  [600] =  { vt = 190, inside = 100, marg = 0,  rel = 0 },  -- T5
+  [639] =  { vt = 181, inside = 100, marg = 0,  rel = 0 },  -- T6
+  [861] =  { vt = 999, inside = 100, marg = 0,  rel = 20 },  -- T7
+  [961] =  { vt = 999, inside = 100, marg = 0,  rel = 20 },  -- T8
+  [1020] = { vt = 999, inside = 103, marg = 0,  rel = 20 },  -- T9
+  [1128] = { vt = 999, inside = 100, marg = 0,  rel = 20 },  -- T10
+  [1250] = { vt = 999, inside = 103, marg = 0,  rel = 20 },  -- T11
+  [1320] = { vt = 999, inside = 100, marg = 0,  rel = 20, ine = 255, send = 15 },  -- T12
+  [1581] = { vt = 199, inside = 100, marg = 20, rel = 20 },  -- T13
+  [1625] = { vt = 999, inside = 100, marg = 0,  rel = 0,  ine = 270, ext = 51 },  -- T14
+  [1836] = { vt = 999, inside = 100, marg = 10, rel = 20, ine = 270, send = 108 },  -- T15
 }
