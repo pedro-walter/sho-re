@@ -9,6 +9,7 @@ hdr = f'''-- v6 plan (scripts/autolap6.lua), track {track}, tire {tire}: per cur
 -- Run it with:  tools/lap.sh {out} my_try     (writes out/video/my_try.mp4, prints the per-turn table and the lap time)
 --   vt  entry speed at the curve start (raw units; HUD km/h = raw*1.1625). 999 = no braking for this curve. Omit the field = computed automatically (optimistic for hairpins).
 --   a   entry position: lateral offset toward the inside edge at the curve start as a fraction of 240 (1 = inside edge, 0 = road centre, <0 = outside).
+--   cruise  optional, cruise = 1: keep a constant speed through this curve (the entry speed) instead of accelerating (e.g. to prepare the next curve).
 return {{
   params = {{                                      -- read by tools/lap.sh
     track = {track},  tire = {tire},  laps = {laps},                 -- which track (1-3) and tire tier (0-4) to drive, and how many laps to render
@@ -19,5 +20,5 @@ return {{
     script = "autolap6.lua",                          -- controller script
   }},
 '''
-body = ''.join(f'  [{s}] = {{ vt = {r["vt"]:g}, a = {r["a"]:g} }},  -- T{i+1}\n' for i, (s, r) in enumerate(rows))
+body = ''.join(f'  [{s}] = {{ vt = {r["vt"]:g}, a = {r["a"]:g}{", cruise = 1" if r.get("cruise") else ""} }},  -- T{i+1}\n' for i, (s, r) in enumerate(rows))
 open(out, 'w').write(hdr + body + '}\n')

@@ -59,6 +59,7 @@ local function load_segs()
       local pl = plan[segs[i][1]] or {}
       segs[i].vt = pl.vt            -- nil = automatic (computed from the exact model once the model exists)
       segs[i].a = pl.a or 1.0
+      segs[i].cruise = pl.cruise and pl.cruise ~= 0   -- optional: keep a constant speed through this curve (the entry speed) instead of accelerating
       segs[i].line = ((segs[i][3] == 3) and 1 or -1) * segs[i].a * INE   -- lateral entry position (inside = +lat in state 3, -lat in state 2)
       print(string.format("%s TURN %d start=%d len=%d dir=%s r=%d", TAG, tn, segs[i][1], segs[i][4] - segs[i][1], segs[i][3] == 2 and "R" or "L", segs[i][2]))
     end
@@ -92,6 +93,11 @@ local function speed_cmd(v, d, bpos)
   if SIM_THROTTLE then return false, true end
   d = d % 2048
   local want_b, want_a = true, false
+  local cs = segs[seg_index(d)]
+  if cs[3] ~= 1 and cs.cruise then
+    local vh = cs.cruise_v or ((cs.vt and cs.vt < 900) and cs.vt or nil)   -- the speed at the curve entry (captured by the controller)
+    if vh then want_b = v < vh end
+  end
   local j = seg_index(d) + 1
   local dist_to = segs[seg_index(d)][4] - d
   local seen = 0
@@ -161,6 +167,11 @@ local ticks, lastticks = 0, 0
 L.watch_write(0xFFC73C, 0xFFC73D, function() ticks = ticks + 1 end)
 local wr = {}
 if MLOG then L.watch_write(0xFF0614, 0xFF0615, function(off, data, mask, pc) local dl = data - L.s16(0xFF0614); if dl > 32767 then dl = dl - 65536 elseif dl < -32768 then dl = dl + 65536 end; wr[#wr + 1] = string.format("%X:%d", pc, dl) end) end
+local HOLDEND = tonumber(os.getenv("SHO_HOLDEND") or 10)
+local APPR = tonumber(os.getenv("SHO_APPR") or 50)   -- approach planning only for curves whose steady steering need at the entry is at least this (of 127); 999 = off
+local appr_seg = nil
+local APPRONLY = nil
+if os.getenv("SHO_APPRONLY") then APPRONLY = {}; for n in os.getenv("SHO_APPRONLY"):gmatch("%d+") do APPRONLY[tonumber(n)] = true end end
 local cmd, tgt_line = 0, 0
 local want_a, want_b = false, true
 local started, rendering = false, (STARTAFTER == nil)
@@ -171,6 +182,7 @@ local startd, stopd
 local entered_seg = nil
 local chk = nil
 local EPS_OV = envn("SHO_EPSOV", 12)           -- a plan that still overshoots the entry line by more than this means: wait
+local EXF = envn("SHO_EXF", 1.5)             -- extra allowed overshoot per unit of entry position beyond the road edge
 local ARRM = envn("SHO_ARRM", 1)                -- start the move so that it is predicted to arrive this many ticks before the curve starts
 
 L.run{ frames = envn("SHO_FRAMES", 26000), input = {}, on_frame = function(f)
@@ -232,18 +244,41 @@ L.run{ frames = envn("SHO_FRAMES", 26000), input = {}, on_frame = function(f)
       entered_seg = i
       print(string.format("%s ENTER turn=%d d=%d lat=%d line=%d err=%d v=%d (vt=%s) tgt_was=%d", TAG, cur.tn, d, lat, cur.line, lat - cur.line, v, tostring(cur.vt), tgt_line))
       tgt_line = cur.line
+      if cur.cruise then cur.cruise_v = v end
     end
     -- the move to the next curve's entry line starts at the latest tick for which it is still predicted to arrive in time
+    -- on the straight before a curve with a strong push: prepare the entry. The approach planner (model6 `approach`) goes towards the outside first and then swings in with the
+    -- steering pressed all the way, so the lock is already full when the curve starts. It is tried once per curve; when it finds nothing better the normal move below is used.
+    if nxt and cur ~= nxt and appr_seg ~= nj and APPR < 900 and (cur[3] == 1 or (cur[4] - d) <= HOLDEND) then
+      appr_seg = nj
+      local sdn0 = nsd; if sdn0 < S.dist - 1 then sdn0 = sdn0 + 2048 end
+      local _, sso = MD.hb_ss(S, sdn0 + 6)
+      if math.abs(sso) >= APPR and (not APPRONLY or APPRONLY[nxt.tn]) then
+        local pl = MD.approach(S, nxt.line, sdn0, nxt[3] == 3 and 1 or -1, math.abs(sso))
+        if not pl then print(string.format("%s APPROACH none turn=%d d=%d lat=%d sso=%d", TAG, nxt.tn, d, lat, sso)) end
+        if pl and pl.rec.n > 150 then pl = nil end
+        if pl then
+          MD.cur = pl; tgt_line = nxt.line; if os.getenv("SHO_PCHK") then chk = { rec = nil, n = 0 } end
+          print(string.format("%s APPROACH turn=%d d=%d lat=%d line=%d pre=%d lean_entry=%d err=%d ticks=%d", TAG, nxt.tn, d, lat, nxt.line, pl.pre, pl.lean_in, pl.err, pl.rec.n))
+        end
+      end
+    end
     if nxt and tgt_line ~= nxt.line and cur ~= nxt then
       local sd = nsd; if sd < S.dist - 1 then sd = sd + 2048 end
       local sw = false
-      if dnext < 1 then sw = true
+      -- moving to a less-inside line for a same-direction next curve while the current curve's push still acts: wait until the current curve is almost over
+      local hold_in = cur[3] ~= 1 and nxt[3] == cur[3] and math.abs(nxt.line) < math.abs(tgt_line) - 20 and (cur[4] - d) > HOLDEND
+      if hold_in then
+      elseif dnext < 1 then sw = true
       else
         local tte = ticks_to(S, sd)
         if tte < 400 then
+          -- an entry position beyond the road edge (a > 1) cannot be reached exactly in time (the real bike lags the model off the road): allow the plan to overshoot it, i.e. start the move earlier
+          local eo = EPS_OV + EXF * math.max(0, math.abs(nxt.line) - INE)
           local pl = MD.best_plan(S, nxt.line, sd)
           local ent = pl.rec.entry_t or tte
-          if (pl.tarr + ARRM >= ent and pl.err <= EPS_OV) or pl.err < -40 then sw = true end
+          if (pl.tarr + ARRM >= ent and pl.err <= eo) or pl.err < -40 then sw = true end
+          if os.getenv("SHO_SWDBG") then print(string.format("%s SWD turn=%d d=%d lat=%d tte=%d tarr=%d ent=%s err=%.0f", TAG, nxt.tn, d, lat, tte, pl.tarr, tostring(pl.rec.entry_t), pl.err)) end
           if sw then print(string.format("%s SWITCH turn=%d d=%d lat=%d v=%.0f hb=%d lean=%d line=%d->%d tte=%d tarr=%d plan_err=%.0f a=%d cap=%d rec_n=%d entry_t=%s sd=%.1f", TAG, nxt.tn, d, lat, S.v, S.hb, S.lean, tgt_line, nxt.line, tte, pl.tarr, pl.err, pl.a, pl.cap, pl.rec.n, tostring(pl.rec.entry_t), sd)) end
         end
       end
@@ -265,7 +300,7 @@ L.run{ frames = envn("SHO_FRAMES", 26000), input = {}, on_frame = function(f)
   local pd = { left = cmd == 1, right = cmd == -1, b = want_b, a = want_a }
   if rendering and os.getenv("SHO_SNAP") and k % tonumber(os.getenv("SHO_SNAP")) == 0 then
     L.snapshot(string.format("rec/%s_%05d.png", TAG, k))
-    print(string.format("REC %d %d %d %d %d %d %d %d %d %d", k, d, cur.tn or 0, cur[3], cur[2], lat, v, L.u16(0xFF066A) ~= 0 and 1 or 0, nxt and nxt.tn or 0, math.floor(dnext)))
+    print(string.format("REC %d %d %d %d %d %d %d %d %d %d %d", k, d, cur.tn or 0, cur[3], cur[2], lat, v, L.u16(0xFF066A) ~= 0 and 1 or 0, nxt and nxt.tn or 0, math.floor(dnext), (function() local l = L.s16(0xFFC978); if l > 127 or l < -127 then l = 0 end; return l end)()))
   end
   if want_a then
     brakef = brakef + 1

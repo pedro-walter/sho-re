@@ -2,6 +2,7 @@
 -- Run it with:  tools/lap.sh tune/v6/track2_t2.lua my_try     (writes out/video/my_try.mp4, prints the per-turn table and the lap time)
 --   vt  entry speed at the curve start (raw units; HUD km/h = raw*1.1625). 999 = no braking for this curve. Omit the field = computed automatically (optimistic for hairpins).
 --   a   entry position: lateral offset toward the inside edge at the curve start as a fraction of 240 (1 = inside edge, 0 = road centre, <0 = outside).
+--   cruise  optional, cruise = 1: keep a constant speed through this curve (the entry speed) instead of accelerating (e.g. to prepare the next curve).
 return {
   params = {                                      -- read by tools/lap.sh
     track = 2,  tire = 2,  laps = 1,                 -- which track (1-3) and tire tier (0-4) to drive, and how many laps to render

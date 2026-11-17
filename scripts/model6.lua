@@ -265,6 +265,70 @@ function M.new(cfg)
     return best
   end
   -- follow the committed plan (re-plan when the real state deviates from the prediction, or when the plan has run out and the target is not reached)
+  self.hb_ss = hb_ss
+  -- approach plan for the entry of a curve with a strong push: first move `pre` units towards the outside of the road (reaching a waypoint W), wait there, then press towards the
+  -- inside until the entry (distance sd) so that the steering is already at full lock when the curve starts and the bike lands on the entry line T0. ins = +1 when the inside
+  -- of the curve is +lat. Candidates for pre are tried from small to large; the first one that reaches `LFULL` lean at the entry (else the best one) is returned, nil when none
+  -- is feasible or none beats the normal plan's entry lean by 20.
+  self.LFULL = cfg.lfull or 115
+  function self.approach(S0, T0, sd, ins, want)
+    local LT = math.min(self.LFULL, (want or 127) + 25)
+    local best
+    local function run(S, W, w, rec)
+      -- hold W for w ticks, then press inward until the entry; returns landing error (+ = beyond), lean (inward positive), peak |lat|
+      local n, peak = 0, 0
+      local function rc(c) n = n + 1; if rec then rec.cmds[#rec.cmds + 1] = c end; peak = math.max(peak, abs(S.lat)); if rec then rec.lat[#rec.lat + 1] = S.lat; rec.hb[#rec.hb + 1] = S.hb; rec.v[#rec.v + 1] = S.v; rec.d[#rec.d + 1] = S.dist; rec.pa[#rec.pa + 1] = S.pa and 1 or 0; rec.pb[#rec.pb + 1] = S.pb and 1 or 0 end end
+      for _ = 1, w do local c = self.hold(S, W); step(S, c); rc(c) end
+      local g = 0
+      while S.dist < sd and g < 250 do local c = press(S, ins, 127); step(S, c); rc(c); g = g + 1 end
+      return ins * (S.lat - T0), -ins * S.lean * (127 / 127), peak, n
+    end
+    for _, pre in ipairs({ 40, 80, 120, 160 }) do
+      local W = T0 - ins * pre
+      if abs(W) <= 250 then
+        local pA = self.best_plan(S0, W, nil)
+        local SA = self.copy(S0)
+        local cA = {}
+        for i = 1, pA.rec.n do step(SA, pA.rec.cmds[i]); cA[i] = pA.rec.cmds[i] end
+        if SA.dist < sd - 1 then
+          local e0 = run(self.copy(SA), W, 0)
+          if e0 >= 0 then
+            -- longest wait that still lands beyond the line: bisection on the wait w
+            local lo, hi = 0, 1
+            while hi < 400 do
+              local Sx = self.copy(SA); local e = run(Sx, W, hi)
+              if e < 0 then break end
+              lo = hi; hi = hi * 2
+            end
+            while hi - lo > 1 do
+              local mid = (lo + hi) // 2
+              local e = run(self.copy(SA), W, mid)
+              if e >= 0 then lo = mid else hi = mid end
+            end
+            local w = lo
+            local e1 = run(self.copy(SA), W, lo); local e2 = run(self.copy(SA), W, lo + 1)
+            if abs(e2) < abs(e1) then w = lo + 1 end
+            local rec = { cmds = {}, lat = {}, hb = {}, v = {}, d = {}, pa = {}, pb = {} }
+            local Sr = self.copy(SA)
+            -- stage A in the record
+            local SA2 = self.copy(S0)
+            for i = 1, #cA do step(SA2, cA[i]); rec.cmds[i] = cA[i]; rec.lat[i] = SA2.lat; rec.hb[i] = SA2.hb; rec.v[i] = SA2.v; rec.d[i] = SA2.dist; rec.pa[i] = SA2.pa and 1 or 0; rec.pb[i] = SA2.pb and 1 or 0 end
+            local err, lean, peak = run(Sr, W, w, rec)
+            rec.n = #rec.cmds
+            if os.getenv("SHO_APPRDBG") then print(string.format("APPRDBG pre=%d w=%d err=%.0f lean=%.0f peak=%.0f n=%d startlat=%.0f d=%.1f sd=%.1f", pre, w, err, lean, peak, rec.n, S0.lat, S0.dist, sd)) end
+            local cand = { rec = rec, T = T0, sd = sd, i = 1, lat0 = S0.lat, appr = true, ins = ins, pre = pre, lean_in = lean, err = err, peak = peak, tarr = rec.n, a = 0, cap = 127 }
+            if abs(err) <= 10 and peak <= 285 and rec.n < 400 then
+              if not best or lean > best.lean_in + 5 then best = cand end
+              if lean >= LT then break end
+            end
+          end
+        end
+      end
+    end
+    if not best then return nil end
+    if best.lean_in < 0.6 * (want or 127) then return nil end
+    return best
+  end
   self.cur = nil
   self.hold = function(S, T0) if cfg.pred then return self.policy_pred(S, T0) else return self.policy(S, T0) end end
   function self.next_cmd(S, T0, sd)
@@ -277,6 +341,10 @@ function M.new(cfg)
       end
     end
     if abs(S.lat - T0) <= (cfg.planmin or 30) then self.cur = nil; return self.hold(S, T0), nil end   -- small errors: the continuous hold law
+    if pl and pl.appr and pl.T == T0 and pl.sd == sd then
+      local np = self.approach(S, T0, sd, pl.ins)                 -- deviated from the prediction: plan the approach again from here
+      if np then np.i = 2; self.cur = np; return np.rec.cmds[1], np end
+    end
     pl = self.best_plan(S, T0, sd); pl.lat0 = S.lat; self.cur = pl
     if pl.rec.n == 0 then return self.policy(S, T0), pl end
     pl.i = 2

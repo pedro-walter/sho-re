@@ -78,6 +78,17 @@ Nothing else. All timing comes from `model6.lua`:
 * **Automatic `vt`** (omit the field): largest entry speed at which the simulated bike, arriving on its line with a relaxed handlebar 25 ticks before the curve, stays
   within |lat| <= 290 through the curve. It is optimistic for the sharpest hairpins (push above the tire's counter-steer authority, e.g. radius 38): give those a number.
 
+### 5b. Entry preparation (`model6.approach`, automatic)
+
+Before a curve whose push needs a steady steering level of at least 50 (of 127) at the entry (`SHO_APPR`, 999 = off), the controller does not just hold the line on the straight:
+it plans (exact model) a move `pre` units (40/80/120/160, smallest that works) towards the **outside**, waits there, and then presses towards the inside continuously until the
+entry, landing on the entry line with the lean already (close to) full. Chosen per curve by simulation; tried once when the previous curve is over (or on the straight); needs a
+plan of <= 150 ticks and a landing error <= 10 with no skid in the plan. Log: `APPROACH turn=.. pre=.. lean_entry=..` / `APPROACH none`. Track 1 T2: steering lock at the curve start
+37 % -> about 85 % (full at +6 units); the bike no longer leaves the road in the T2 sweep (max |lat| 262 instead of 318). The plans of the other curves had to be searched again
+(`tune/v6/track1_t0.lua` 117.58 s, `track1_t1.lua` 114.48 s with more skid frames: 117).
+Optional per-curve plan field `cruise = 1`: through that curve the throttle holds the speed the bike had at the curve entry (on/off around that value) instead of accelerating; braking for the next curve still takes priority.
+The video shows the steering lock (lean) as a bar under the picture.
+
 ## 6. What the simulation reproduces in the emulator
 
 Per move the controller can log (`SHO_PCHK=1`) real vs predicted lateral position, speed and distance tick by tick. After the speed model was exact: lateral error 0-4 units

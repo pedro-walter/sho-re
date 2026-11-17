@@ -404,7 +404,7 @@ L.run{ frames = tonumber(os.getenv("SHO_FRAMES") or 26000), input = input, on_fr
   pd.b = want_b
   pd.a = want_a
   pd.c = os.getenv("SHO_TURBO") ~= nil
-  if rendering and os.getenv("SHO_SNAP") and k % tonumber(os.getenv("SHO_SNAP")) == 0 then L.snapshot(string.format("rec/%s_%05d.png", TAG, k)); print(string.format("REC %d %d %d %d %d %d %d %d %d %d", k, d, cur.tn or 0, cur[3], cur[2], lat, v, L.u16(0xFF066A) ~= 0 and 1 or 0, nxt.tn or 0, dnext)) end
+  if rendering and os.getenv("SHO_SNAP") and k % tonumber(os.getenv("SHO_SNAP")) == 0 then L.snapshot(string.format("rec/%s_%05d.png", TAG, k)); print(string.format("REC %d %d %d %d %d %d %d %d %d %d %d", k, d, cur.tn or 0, cur[3], cur[2], lat, v, L.u16(0xFF066A) ~= 0 and 1 or 0, nxt.tn or 0, dnext, (function() local l = L.s16(0xFFC978); if l > 127 or l < -127 then l = 0 end; return l end)())) end
   if want_a then
     brakef = brakef + 1
     if not brk_on then brk_on = true; brk_v0 = v; brk_n = 0 end

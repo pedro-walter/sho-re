@@ -2,6 +2,7 @@
 -- Run it with:  tools/lap.sh tune/v6/track1_t0.lua my_try     (writes out/video/my_try.mp4, prints the per-turn table and the lap time)
 --   vt  entry speed at the curve start (raw units; HUD km/h = raw*1.1625). 999 = no braking for this curve. Omit the field = computed automatically (optimistic for hairpins).
 --   a   entry position: lateral offset toward the inside edge at the curve start as a fraction of 240 (1 = inside edge, 0 = road centre, <0 = outside).
+--   cruise  optional, cruise = 1: keep a constant speed through this curve (the entry speed) instead of accelerating (e.g. to prepare the next curve).
 return {
   params = {                                      -- read by tools/lap.sh
     track = 1,  tire = 0,  laps = 1,                 -- which track (1-3) and tire tier (0-4) to drive, and how many laps to render
@@ -12,15 +13,15 @@ return {
     script = "autolap6.lua",                          -- controller script
   },
   [104] = { vt = 999, a = 1 },  -- T1
-  [251] = { vt = 215, a = 1 },  -- T2
+  [251] = { vt = 223, a = 1 },  -- T2
   [378] = { vt = 999, a = 1 },  -- T3
-  [532] = { vt = 217, a = 1 },  -- T4
-  [600] = { vt = 190, a = 1.15 },  -- T5
+  [532] = { vt = 999, a = 1 },  -- T4
+  [600] = { vt = 190, a = 1.15, cruise = 1 },  -- T5
   [639] = { vt = 181, a = 1 },  -- T6
   [861] = { vt = 999, a = 1 },  -- T7
-  [961] = { vt = 225, a = 1 },  -- T8
+  [961] = { vt = 999, a = 1 },  -- T8
   [1020] = { vt = 999, a = 1.15 },  -- T9
-  [1128] = { vt = 217, a = 1 },  -- T10
+  [1128] = { vt = 999, a = 1 },  -- T10
   [1250] = { vt = 999, a = 1.15 },  -- T11
   [1320] = { vt = 999, a = 1 },  -- T12
   [1581] = { vt = 199, a = 1 },  -- T13

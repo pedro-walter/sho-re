@@ -19,7 +19,7 @@ def parse(path):
 def write(plan, path):
     with open(path, 'w') as f:
         f.write('return {\n')
-        for c, d in sorted(plan.items()): f.write('  [%d] = { vt = %g, a = %g },\n' % (c, d['vt'], round(d['a'], 2)))
+        for c, d in sorted(plan.items()): f.write('  [%d] = { vt = %g, a = %g%s },\n' % (c, d['vt'], round(d['a'], 2), ', cruise = 1' if d.get('cruise') else ''))
         f.write('}\n')
 def evaluate(plan, tag):
     pf = f'out/plans/s6_{TRACK}_{TIRE}_{SEED}_{tag}.lua'; write(plan, os.path.join(ROOT, pf))

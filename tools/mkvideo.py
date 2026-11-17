@@ -20,9 +20,9 @@ def font(sz):
 F1, F2 = font(34), font(22)
 tmp = os.path.join(root, 'out', 'vid'); os.makedirs(tmp, exist_ok=True)
 def render(i):
-    k, d, tn, st, r, lat, v, skid, ntn, dn = recs[i]
+    k, d, tn, st, r, lat, v, skid, ntn, dn = recs[i][:10]; lean = recs[i][10] if len(recs[i]) > 10 else None
     im = Image.open(f'{root}/out/rec/{tag}_{k:05d}.png').convert('RGB').resize((320*S, 224*S), Image.NEAREST)
-    base = Image.new('RGB', (320*S, 224*S + 84), (0, 0, 0)); base.paste(im, (0, 0)); im = base
+    base = Image.new('RGB', (320*S, 224*S + 124), (0, 0, 0)); base.paste(im, (0, 0)); im = base
     dr = ImageDraw.Draw(im, 'RGBA'); Y = 224*S
     if tn:
         t = turns[tn]
@@ -41,6 +41,17 @@ def render(i):
         dr.line((x, by-12, x, by+12), fill=(255, 60, 60), width=3)
     x = bx0 + (bx1-bx0) * (300 - max(-330, min(330, lat))) / 600
     dr.ellipse((x-7, by-7, x+7, by+7), fill=(80, 255, 120))
+    if lean is not None:
+        # steering lock bar: the lean (-127..127) that the game applies; negative = steering to the left (lateral +), full lock = |lean| 127
+        full = abs(lean) >= 127
+        col = (80, 255, 120) if full else (255, 220, 60)
+        sx0, sx1, sy = 300, 940, Y+104
+        dr.rectangle((sx0, sy-8, sx1, sy+8), fill=(60, 60, 60, 220))
+        cx = (sx0+sx1)/2; ex = cx + (sx1-sx0)/2 * lean / 127
+        dr.rectangle((min(cx, ex), sy-6, max(cx, ex), sy+6), fill=col)
+        dr.line((cx, sy-12, cx, sy+12), fill=(255, 255, 255), width=2)
+        side = 'LEFT' if lean < 0 else 'RIGHT'
+        dr.text((12, Y+92), (('FULL LOCK ' if full else 'steer ') + f'{side} {abs(lean)*100//127}%') if lean else 'steer 0%', font=F2, fill=col)
     im.save(f'{tmp}/f_{i:05d}.png')
 if __name__ == '__main__':
     for f in os.listdir(tmp):
