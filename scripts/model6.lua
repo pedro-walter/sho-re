@@ -340,6 +340,10 @@ function M.new(cfg)
         if abs(S.lat - exp) <= (cfg.dev or 8) then pl.i = i + 1; return pl.rec.cmds[i], pl end
       end
     end
+    if not sd and (cfg.sat_hold or 0) > 0 and abs(S.lat - T0) <= 90 then   -- inside a curve with the steering already saturated toward the target: keep the lock (a replan would release it to arrive after the curve)
+      local dir = (T0 >= S.lat) and 1 or -1
+      if -S.so * dir >= cfg.sat_hold then self.cur = nil; return self.hold(S, T0), nil end
+    end
     if abs(S.lat - T0) <= (cfg.planmin or 30) then self.cur = nil; return self.hold(S, T0), nil end   -- small errors: the continuous hold law
     if pl and pl.appr and pl.T == T0 and pl.sd == sd then
       local np = self.approach(S, T0, sd, pl.ins)                 -- deviated from the prediction: plan the approach again from here

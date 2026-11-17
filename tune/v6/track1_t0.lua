@@ -5,7 +5,7 @@
 --   cruise  optional, cruise = 1: keep a constant speed through this curve (the entry speed) instead of accelerating (e.g. to prepare the next curve).
 return {
   params = {                                      -- read by tools/lap.sh
-    track = 1,  tire = 0,  laps = 1,                 -- which track (1-3) and tire tier (0-4) to drive, and how many laps to render
+    track = 1,  tire = 0,  laps = 2,                 -- which track (1-3) and tire tier (0-4) to drive, and how many laps to render
     frame = 0,   engine = 0, brake = 0,  muffler = 0, oil = 1,   -- part tiers (tire is above): frame 0-5, engine 0-5, brake 0-4, muffler 0-3, oil 0-3, tire 0-4
     start_kmh = 0,                                    -- speed at the start of the first lap in HUD km/h: 0 = standing start, 280 = full speed
     stop_turn = 0,                                    -- 0 = full run; N = stop (and render only) up to the end of turn N of the first lap
@@ -20,11 +20,11 @@ return {
   [639] = { vt = 181, a = 1 },  -- T6
   [861] = { vt = 999, a = 1 },  -- T7
   [961] = { vt = 999, a = 1 },  -- T8
-  [1020] = { vt = 999, a = 1.15 },  -- T9
+  [1020] = { vt = 999, a = 1.35 },  -- T9
   [1128] = { vt = 999, a = 1 },  -- T10
-  [1250] = { vt = 999, a = 1.15 },  -- T11
+  [1250] = { vt = 999, a = 1.25 },  -- T11
   [1320] = { vt = 999, a = 1 },  -- T12
-  [1581] = { vt = 199, a = 1 },  -- T13
+  [1581] = { vt = 197, a = 1 },  -- T13
   [1625] = { vt = 999, a = 1 },  -- T14
   [1836] = { vt = 999, a = 1 },  -- T15
 }

@@ -123,7 +123,7 @@ MD = dofile(os.getenv("SHO_ROOT") .. "/scripts/model6.lua").new{
   profile = function(dist) return profile(dist) end,
   road = function(dist) local sg = segs[seg_index(dist % 2048)]; return sg[3], sg[2] end,
   speed_cmd = function(v, d, bp) return speed_cmd(v, d, bp) end,
-  brk = function() return BRK end, pred = true, hold_h = envn("SHO_HOLDH", 9), hold_h2 = envn("SHO_HOLDH2", 15) }
+  brk = function() return BRK end, pred = true, hold_h = envn("SHO_HOLDH", 9), hold_h2 = envn("SHO_HOLDH2", 15), sat_hold = envn("SHO_SATHOLD", T >= 1 and 120 or 0) }
 MD.VLATMAX = math.abs(MD.lateral(127, 200, false)) * 0.95
 local function ticks_to(S0, sd)               -- ticks until the lap distance reaches sd (speed policy only)
   local S = MD.copy(S0)
@@ -183,6 +183,8 @@ local entered_seg = nil
 local chk = nil
 local EPS_OV = envn("SHO_EPSOV", 12)           -- a plan that still overshoots the entry line by more than this means: wait
 local EXF = envn("SHO_EXF", 1.5)             -- extra allowed overshoot per unit of entry position beyond the road edge
+local EXMAX = envn("SHO_EXMAX", 60)            -- cap of that extra overshoot
+local SWTMAX = envn("SHO_SWTMAX", 90)          -- plan the move to the next curve's entry line only when it is at most this many ticks away (longer horizons make bad plans)
 local ARRM = envn("SHO_ARRM", 1)                -- start the move so that it is predicted to arrive this many ticks before the curve starts
 
 L.run{ frames = envn("SHO_FRAMES", 26000), input = {}, on_frame = function(f)
@@ -272,9 +274,9 @@ L.run{ frames = envn("SHO_FRAMES", 26000), input = {}, on_frame = function(f)
       elseif dnext < 1 then sw = true
       else
         local tte = ticks_to(S, sd)
-        if tte < 400 then
+        if tte < SWTMAX then
           -- an entry position beyond the road edge (a > 1) cannot be reached exactly in time (the real bike lags the model off the road): allow the plan to overshoot it, i.e. start the move earlier
-          local eo = EPS_OV + EXF * math.max(0, math.abs(nxt.line) - INE)
+          local eo = EPS_OV + math.min(EXMAX, EXF * math.max(0, math.abs(nxt.line) - INE))
           local pl = MD.best_plan(S, nxt.line, sd)
           local ent = pl.rec.entry_t or tte
           if (pl.tarr + ARRM >= ent and pl.err <= eo) or pl.err < -40 then sw = true end
@@ -288,6 +290,7 @@ L.run{ frames = envn("SHO_FRAMES", 26000), input = {}, on_frame = function(f)
     local sdn = nil
     if nxt and tgt_line == nxt.line and cur ~= nxt then sdn = nsd; if sdn < S.dist - 1 then sdn = sdn + 2048 end end
     cmd, pl_used = MD.next_cmd(S, tgt_line, sdn)
+    if os.getenv("SHO_NCDBG") and d >= (tonumber(os.getenv("SHO_NCD0")) or 1540) and d < (tonumber(os.getenv("SHO_NCD1")) or 1585) then print(string.format("%s NC d=%d lat=%d hb=%d lean=%d v=%.0f cmd=%d i=%s n=%s tarr=%s err=%s predlat=%s sdn=%s", TAG, d, lat, S.hb, S.lean, S.v, cmd or 0, tostring(pl_used and pl_used.i), tostring(pl_used and pl_used.rec.n), tostring(pl_used and pl_used.tarr), tostring(pl_used and pl_used.err), tostring(pl_used and pl_used.rec.lat[(pl_used.i or 2)-2]), tostring(sdn))) end
     if chk then
       chk.n = chk.n + 1
       if pl_used and pl_used.rec and not chk.rec then chk.rec = pl_used.rec; chk.n = 1 end
