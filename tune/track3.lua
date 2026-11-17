@@ -19,6 +19,8 @@ return {
     frame = 0,   engine = 0, brake = 0,  muffler = 0, oil = 0,   -- part tiers (tire is above): frame 0-5, engine 0-5, brake 0-4, muffler 0-3, oil 0-3, tire 0-4
     start_kmh = 0,                                    -- speed at the start of the first lap in HUD km/h: 0 = standing start, 280 = full speed
     bmargin = 1.25,                                   -- safety factor on the braking distance (the controller learns the real brake deceleration while it drives): 1 = brake as late as the model allows
+    stop_turn = 0,                                    -- 0 = full run; N = stop (and render only) up to the end of turn N of the first lap (fast tuning of early turns)
+    start_after_turn = 0,                             -- 0 = start at the line; N = drive turns 1..N unrendered and start the render/log at the end of turn N, at start_kmh (the pre-roll still runs the plan from a standing start)
     script = "autolap5.lua",                          -- controller script
   },
   [116] = {  vt = 999, a = 1,    lead = 85, marg = 0,  rel = 20 },  -- T1

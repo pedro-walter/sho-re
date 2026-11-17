@@ -237,6 +237,12 @@ local t0, lastlap, skidf, lapstart = nil, 0, 0, 0
 local offf = 0
 local maxv, sumv, nv, brakef = 0, 0, 0, 0
 local started = false
+local MLOG = os.getenv("SHO_MLOG") ~= nil           -- per-frame model log (tools/steermodel.py validates the exact steering/lateral model against it)
+local wr = {}
+if MLOG then L.watch_write(0xFF0614, 0xFF0615, function(off, data, mask, pc) local dl = data - L.s16(0xFF0614); if dl > 32767 then dl = dl - 65536 elseif dl < -32768 then dl = dl + 65536 end; wr[#wr + 1] = string.format("%X:%d", pc, dl) end) end
+local STARTAFTER, startd, rendering = tonumber(os.getenv("SHO_STARTAFTER") or ""), nil, true   -- SHO_STARTAFTER=N: drive turns 1..N silently, start logging/snapshots at the end of turn N at SHO_STARTV speed
+rendering = (STARTAFTER == nil)
+local STOPTURN, stopd = tonumber(os.getenv("SHO_STOPTURN") or ""), nil
 L.run{ frames = tonumber(os.getenv("SHO_FRAMES") or 26000), input = input, on_frame = function(f)
   if LOADSTATE and f == 2 then manager.machine:load(LOADSTATE) end
   if f == 1250 and not LOADSTATE then L.mem:write_u32(0xFFB638, 0x00999999) end
@@ -254,11 +260,21 @@ L.run{ frames = tonumber(os.getenv("SHO_FRAMES") or 26000), input = input, on_fr
   if SAVESTATE and started and f > 0 and (t0 or f) ~= nil and L.frame > (t0 or 0) + 3 then manager.machine:exit() end
   t0 = t0 or f
   local k = f - t0
-  if k <= 2 and os.getenv("SHO_STARTV") and tonumber(os.getenv("SHO_STARTV")) > 0 then L.mem:write_u16(0xFF064A, tonumber(os.getenv("SHO_STARTV"))) end   -- flying start (HUD km/h / 1.1625)
+  if k <= 2 and not STARTAFTER and os.getenv("SHO_STARTV") and tonumber(os.getenv("SHO_STARTV")) > 0 then L.mem:write_u16(0xFF064A, tonumber(os.getenv("SHO_STARTV"))) end   -- flying start (HUD km/h / 1.1625)
   if STOPK > 0 and k >= STOPK then print(string.format("%s SUM k=%d dist=%d lap=%d skid_frames=%d off_frames=%d brake_frames=%d avgv=%d", TAG, k, L.u16(0xFF0616), L.u16(0xFF060A), skidf, offf, brakef, sumv // math.max(nv, 1))); manager.machine:exit() end
   local lat, st, v, s = L.s16(0xFF0614), L.u16(0xFF067E), L.u16(0xFF064A), L.s16(0xFF063A)
   local d = L.u16(0xFF0616) % 2048
   local lap = L.u16(0xFF060A)
+  if STARTAFTER and not rendering and lap == 0 then
+    if not startd then for i = 1, #segs do if segs[i].tn == STARTAFTER then startd = segs[i][4] end end; startd = startd or 99999 end
+    if d >= startd and d < startd + 200 then
+      rendering = true
+      if os.getenv("SHO_STARTV") and tonumber(os.getenv("SHO_STARTV")) > 0 then L.mem:write_u16(0xFF064A, tonumber(os.getenv("SHO_STARTV"))) end
+      print(string.format("%s RENDER START after turn %d k=%d d=%d", TAG, STARTAFTER, k, d))
+    end
+  end
+  if STOPTURN and lap == 0 and not stopd then for i = 1, #segs do if segs[i].tn == STOPTURN then stopd = segs[i][4] end end; if not stopd then stopd = 99999 end end   -- SHO_STOPTURN=N: end the run when the first lap passes the end of turn N
+  if STOPTURN and lap == 0 and d >= stopd and d < stopd + 200 then print(string.format("%s STOP at end of turn %d k=%d d=%d", TAG, STOPTURN, k, d)); manager.machine:exit() end
   if lap ~= lastlap then print(string.format("%s LAP %d->%d at k=%d (%.2f s) lap_frames=%d", TAG, lastlap, lap, k, k/60, k - lapstart)); lastlap = lap; lapstart = k; lapsdone = (lapsdone or 0) + 1; if os.getenv("SHO_ONELAP") and lapsdone >= (tonumber(os.getenv("SHO_ONELAP")) or 1) then manager.machine:exit() end end
   if v > maxv then maxv = v end
   sumv = sumv + v; nv = nv + 1
@@ -276,7 +292,7 @@ L.run{ frames = tonumber(os.getenv("SHO_FRAMES") or 26000), input = input, on_fr
   local target, push = LS, 0
   local remain = cur[4] - d
   local tpre = DPF * math.max(v, 60) * TPRE           -- distance covered while the handlebar ramps up
-  local fulllock = nil
+  local fulllock, plcur = nil, nil
   -- measured push: lateral velocity over 6 frames plus the steering effect (lat_vel = push - s*Gv/127)
   hist[#hist + 1] = { lat, s, i, L.u16(0xFF066A) ~= 0 }
   if #hist > 7 then table.remove(hist, 1) end
@@ -298,6 +314,7 @@ L.run{ frames = tonumber(os.getenv("SHO_FRAMES") or 26000), input = input, on_fr
     elseif not pm then pe = nil end
     local cdir = ps
     local pl = plan and plan[cur[1]]
+    plcur = pl
     local inwin = false
     if pl and nxt[3] ~= 1 and pl.lead == nil and nxt[3] ~= cur[3] then
       -- automatic lock switch: hold this curve's lock as long as reversing LATER still puts the bike at the next curve's entry position (and at full lock) when this curve ends
@@ -357,8 +374,8 @@ L.run{ frames = tonumber(os.getenv("SHO_FRAMES") or 26000), input = input, on_fr
   local sd = math.max(-127, math.min(127, (push - vd) * 127 / Gv))
   if fulllock then
     sd = fulllock * 127
-    local relv = (pl and pl.rel) or REL
-    if relv > 0 and remain < DPF * math.max(v, 60) * relv and nxt[3] == 1 then sd = fulllock * 127 * 0.3 end
+    local relv = (plcur and plcur.rel) or REL
+    if relv > 0 and remain < DPF * math.max(v, 60) * relv and nxt[3] == 1 then sd = fulllock * 127 * ((plcur and plcur.relf) or 0.3) end   -- relf: fraction of the lock kept once eased (default 0.3; 0 = fully released)
   end
   if pressing and cur[3] == 1 then sd = pressing * 127 end
   local pd = {}
@@ -387,7 +404,7 @@ L.run{ frames = tonumber(os.getenv("SHO_FRAMES") or 26000), input = input, on_fr
   pd.b = want_b
   pd.a = want_a
   pd.c = os.getenv("SHO_TURBO") ~= nil
-  if os.getenv("SHO_SNAP") and k % tonumber(os.getenv("SHO_SNAP")) == 0 then L.snapshot(string.format("rec/%s_%05d.png", TAG, k)); print(string.format("REC %d %d %d %d %d %d %d %d %d %d", k, d, cur.tn or 0, cur[3], cur[2], lat, v, L.u16(0xFF066A) ~= 0 and 1 or 0, nxt.tn or 0, dnext)) end
+  if rendering and os.getenv("SHO_SNAP") and k % tonumber(os.getenv("SHO_SNAP")) == 0 then L.snapshot(string.format("rec/%s_%05d.png", TAG, k)); print(string.format("REC %d %d %d %d %d %d %d %d %d %d", k, d, cur.tn or 0, cur[3], cur[2], lat, v, L.u16(0xFF066A) ~= 0 and 1 or 0, nxt.tn or 0, dnext)) end
   if want_a then
     brakef = brakef + 1
     if not brk_on then brk_on = true; brk_v0 = v; brk_n = 0 end
@@ -400,6 +417,7 @@ L.run{ frames = tonumber(os.getenv("SHO_FRAMES") or 26000), input = input, on_fr
       print(string.format("%s BRK run=%d frames %d->%d dec=%.3f estimate=%.3f", TAG, brk_n, brk_v0, v, dec, BRK))
     end
   end
+  if MLOG then print(string.format("%s K %d in=%s hb=%d so=%d lean=%d lat=%d v=%d d=%d skid=%d D=%d,%d sk=%d wr=%s", TAG, k, pd.left and "L" or (pd.right and "R" or "N"), L.u16(0xFFC73C), L.s16(0xFF063A), L.s16(0xFFC978), lat, v, L.u16(0xFF0616), L.u16(0xFF066A), L.s16(0xFF0BA6), L.s16(0xFF0CB8), L.u16(0xFF065A), table.concat(wr, ","))); wr = {} end
   L.pad(pd)
-  if LOG > 0 and k % LOG == 0 then print(string.format("%s T k=%d d=%d lap=%d st=%d r=%d lat=%d tgt=%d s=%d sd=%d v=%d skid=%d pm=%s push=%.1f D=%d %s%s", TAG, k, d, lap, st, cur[2], lat, target, s, math.floor(sd), v, L.u16(0xFF066A), pm and string.format("%.1f", pm) or "-", push, L.s16(0xFF0BA6) - L.s16(0xFF0CB8), want_a and "A" or "-", want_b and "B" or "-")) end
+  if rendering and LOG > 0 and k % LOG == 0 then print(string.format("%s T k=%d d=%d lap=%d st=%d r=%d lat=%d tgt=%d s=%d sd=%d v=%d skid=%d pm=%s push=%.1f D=%d %s%s", TAG, k, d, lap, st, cur[2], lat, target, s, math.floor(sd), v, L.u16(0xFF066A), pm and string.format("%.1f", pm) or "-", push, L.s16(0xFF0BA6) - L.s16(0xFF0CB8), want_a and "A" or "-", want_b and "B" or "-")) end
 end }

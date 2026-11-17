@@ -23,10 +23,10 @@ def write(plan, path):
             f.write('  [%d] = { %s },\n' % (c, ', '.join('%s = %g' % kv for kv in d.items())))
         f.write('}\n')
 def evaluate(plan, tag):
-    pf = f'out/plans/w{TRACK}_{TIRE}_{SEED}_{tag}.lua'; write(plan, os.path.join(ROOT, pf))
+    pf = f'out/plans/w{TRACK}_{TIRE}_{SEED}_o{os.environ.get("OIL","0")}_{tag}.lua'; write(plan, os.path.join(ROOT, pf))
     log = f'/tmp/w{TRACK}_{TIRE}_{SEED}_{tag}.txt'
     env = dict(os.environ, SHO_ROOT=ROOT, SHO_ONELAP='1', SHO_GENT=os.environ.get('GENT','80'), SHO_GFADE='40', SHO_NOBOTS='1', SHO_NOCHAIN='1', SHO_PLAN=pf, SHO_LEAD='40', SHO_BR='0.35',
-               SHO_LOADSTATE=f'race{TRACK}', SHO_REL='20', SHO_MARG='0', SHO_TPRE='150', SHO_DUTY='1.0', SHO_RIVAL=str(TRACK - 1), SHO_TIRE=str(TIRE), SHO_ENGINE='0', SHO_LOG='3', SHO_FRAMES='11000', SHO_TAG='s')
+               SHO_LOADSTATE=f'race{TRACK}', SHO_REL='20', SHO_MARG='0', SHO_TPRE='150', SHO_DUTY='1.0', SHO_RIVAL=str(TRACK - 1), SHO_TIRE=str(TIRE), SHO_ENGINE='0', SHO_OIL=os.environ.get('OIL','0'), SHO_LOG='3', SHO_FRAMES='11000', SHO_TAG='s')
     with open(log, 'w') as lf: subprocess.run(['tools/mame.sh', 'scripts/' + os.environ.get('SCRIPT', 'autolap4.lua')], cwd=ROOT, env=env, stdout=lf, stderr=subprocess.STDOUT)
     lap = None; skid = off = 0; dmax = 0
     for ln in open(log):
