@@ -4,11 +4,12 @@ Each candidate = one headless MAME lap from the race savestate. Score = lap time
 Usage: TRACK=1 PAR=8 SEED=1 OIL=1 tools/plansearch6.py TIRE START_PLAN.lua OUT.lua ROUNDS"""
 import re, sys, os, random, subprocess, json, concurrent.futures as cf
 TIRE, START, OUT, ROUNDS = int(sys.argv[1]), sys.argv[2], sys.argv[3], int(sys.argv[4])
-TRACK = int(os.environ.get('TRACK', 1)); SEED = int(os.environ.get('SEED', 0)); PAR = int(os.environ.get('PAR', 8))
-OIL = os.environ.get('OIL', '0'); FRAME = os.environ.get('FRAME', '0'); ENGINE = os.environ.get('ENGINE', '0'); BRAKET = os.environ.get('BRAKET', '0'); MUFFLER = os.environ.get('MUFFLER', '0')
+TRACK = int(os.environ.get('TRACK', 1)); SEED = int(os.environ.get('SEED', 0)); STEP0 = None; PAR = int(os.environ.get('PAR', 8))
+LAPS = int(os.environ.get('LAPS', 1)); OIL = os.environ.get('OIL', '0'); FRAME = os.environ.get('FRAME', '0'); ENGINE = os.environ.get('ENGINE', '0'); BRAKET = os.environ.get('BRAKET', '0'); MUFFLER = os.environ.get('MUFFLER', '0')
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+VCAP = int(os.environ.get('VCAP', 241))   # entry speed from which a curve counts as 'no braking' (999): 241, or 279 with turbo
 STEP = {'vt': 8, 'a': 0.1}
-LIM = {'vt': (40, 999), 'a': (0.2, 1.15)}
+LIM = {"vt": (40, 999), "a": (0.2, 1.3)}
 def parse(path):
     plan = {}
     for m in re.finditer(r'\[(\d+)\]\s*=\s*\{([^}]*)\}', open(path).read()):
@@ -24,21 +25,21 @@ def write(plan, path):
 def evaluate(plan, tag):
     pf = f'out/plans/s6_{TRACK}_{TIRE}_{SEED}_{tag}.lua'; write(plan, os.path.join(ROOT, pf))
     log = f'/tmp/s6_{TRACK}_{TIRE}_{SEED}_{tag}.txt'
-    env = dict(os.environ, SHO_ROOT=ROOT, SHO_ONELAP='1', SHO_NOBOTS='1', SHO_PLAN=pf, SHO_LOADSTATE=f'race{TRACK}', SHO_RIVAL=str(TRACK - 1), SHO_TRACK=str(TRACK),
-               SHO_TIRE=str(TIRE), SHO_ENGINE=ENGINE, SHO_OIL=OIL, SHO_FRAME=FRAME, SHO_BRAKET=BRAKET, SHO_MUFFLER=MUFFLER, SHO_LOG='3', SHO_FRAMES='11000', SHO_ABORT=os.environ.get('ABORT', '300'), SHO_TAG='s')
-    with open(log, 'w') as lf: subprocess.run(['tools/mame.sh', 'scripts/autolap6.lua'], cwd=ROOT, env=env, stdout=lf, stderr=subprocess.STDOUT)
-    lap = None; skid = off = 0; dmax = 0
+    env = dict(os.environ, SHO_ROOT=ROOT, SHO_ONELAP=str(LAPS), SHO_NOBOTS='1', SHO_PLAN=pf, SHO_LOADSTATE=f'race{TRACK}', SHO_RIVAL=str(TRACK - 1), SHO_TRACK=str(TRACK),
+               SHO_TIRE=str(TIRE), SHO_ENGINE=ENGINE, SHO_OIL=OIL, SHO_FRAME=FRAME, SHO_BRAKET=BRAKET, SHO_MUFFLER=MUFFLER, SHO_LOG='3', SHO_FRAMES=str(11000 * LAPS), SHO_ABORT=os.environ.get('ABORT', '300'), SHO_TAG='s')
+    with open(log, 'w') as lf: subprocess.run(['nice', '-n', '19', 'tools/mame.sh', 'scripts/' + os.environ.get('SCRIPT', 'autolap6.lua')], cwd=ROOT, env=env, stdout=lf, stderr=subprocess.STDOUT)
+    ends = []; skid = off = 0
     for ln in open(log):
-        m = re.search(r'LAP 0->1 at k=(\d+)', ln)
-        if m: lap = int(m.group(1))
-        m = re.search(r' T k=\d+ d=(\d+) lap=0 ', ln)
-        if m: dmax = max(dmax, int(m.group(1)))
-        m = re.search(r' T k=\d+ d=\d+ lap=0 .* lat=(-?\d+) .* skid=(\d+)', ln)
+        m = re.search(r'LAP \d->\d at k=(\d+)', ln)
+        if m: ends.append(int(m.group(1)))
+        m = re.search(r' T k=\d+ d=\d+ lap=\d .* lat=(-?\d+) .* skid=(\d+)', ln)
         if m:
             if int(m.group(2)): skid += 3
             if abs(int(m.group(1))) > 270: off += 3
-    if lap is None: return 200 + 0.015 * skid + 0.003 * off + (2048 - dmax) * 0.05, ('DNF', skid, off, dmax)
-    return lap / 60 + 0.015 * skid + 0.003 * off, (round(lap / 60, 2), skid, off)
+    pen = 0.03 * skid + 0.01 * off
+    if len(ends) < LAPS: return 1000 * (LAPS - len(ends)) + pen, ('DNF', len(ends), skid, off)
+    laps = [(ends[i] - (ends[i - 1] if i else 0)) / 60 for i in range(LAPS)]
+    return sum(laps) + pen, (' '.join('%.2f' % x for x in laps), skid, off)
 plan = parse(START)
 best, info = evaluate(plan, 'base')
 print('start', best, info, flush=True)
@@ -51,10 +52,10 @@ for r in range(ROUNDS):
         c = random.choice(curves); k = random.choice(['vt', 'vt', 'a'])
         n = json.loads(json.dumps({str(a): b for a, b in plan.items()})); n = {int(a): b for a, b in n.items()}
         cur = n[c][k]
-        if k == 'vt' and cur >= 900: cur = 241
+        if k == 'vt' and cur >= 900: cur = VCAP
         step = STEP[k] * random.choice([-3, -2, -1, 1, 1, 2, 3])
         lo, hi = LIM[k]; v = min(hi, max(lo, cur + step))
-        if k == 'vt' and v >= 241: v = 999
+        if k == 'vt' and v >= VCAP: v = 999
         n[c][k] = v
         cands.append((c, k, n))
     with cf.ThreadPoolExecutor(PAR) as ex: res = list(ex.map(lambda a: evaluate(a[1][2], f'{a[0]}'), enumerate(cands)))

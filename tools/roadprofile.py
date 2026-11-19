@@ -11,12 +11,14 @@ def trunc(a, b):
 def push_of(dc, v):
     if dc == 0: return 0
     q = trunc(dc * v, 110); return 2 * (q + (1 if q >= 0 else -1))
+import os, re
+VMIN = int(os.environ.get('VMIN', -1))   # VMIN=240: only ticks with turbo speeds (turbo push profile); BASE=file: fill unsampled distances from that profile
 track, out = sys.argv[1], sys.argv[2]
 votes = collections.defaultdict(collections.Counter)
 for path in sys.argv[3:]:
     rows = m.parse(path); byk = {r['k']: r for r in rows}
     for k, r in byk.items():
-        if k % 3 != 2 or abs(r['lat']) > 480: continue
+        if k % 3 != 2 or abs(r['lat']) > 480 or r['v'] <= VMIN: continue
         pushes = [dl for kk in (k - 2, k - 1, k) if kk in byk for (pc, dl) in byk[kk]['wr'] if pc == 'EA7A']
         v = r['v']; d = r['d'] % 2048
         for dc in range(-14, 15):
@@ -26,6 +28,9 @@ prof = []
 for d in range(2048):
     c = votes.get(d)
     prof.append(c.most_common(1)[0][0] if c else None)
+if os.environ.get('BASE'):
+    base = list(map(int, re.findall(r'-?\d+', open(os.environ['BASE']).read().split('return', 1)[1])))
+    sc = float(os.environ.get('SCALE', 1)); prof = [p if p is not None else int(base[i] * sc + (0.5 if base[i] >= 0 else -0.5)) for i, p in enumerate(prof)]
 for d in range(2048):
     if prof[d] is None: prof[d] = prof[d - 1] if d else 0
 with open(out, 'w') as f:
