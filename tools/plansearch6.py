@@ -44,14 +44,31 @@ plan = parse(START)
 best, info = evaluate(plan, 'base')
 print('start', best, info, flush=True)
 write(plan, os.path.join(ROOT, OUT))
-random.seed(TIRE + 100 * SEED + 1000 * TRACK)
+random.seed(TIRE + 100 * SEED + 1000 * TRACK + int(os.environ.get('RSEED', 0)))
 curves = sorted(plan)
+weights = [1.0] * len(curves)
+def hot(tag):
+    # weight curves by the skid/off-road ticks of the winning run: the curve before the bad tick (and the one before that) get the weight
+    w = [1.0] * len(curves)
+    try:
+        for ln in open(f'/tmp/s6_{TRACK}_{TIRE}_{SEED}_{tag}.txt'):
+            m = re.search(r' T k=\d+ d=(\d+) lap=\d .* lat=(-?\d+) .* skid=(\d+)', ln)
+            if m and (int(m.group(3)) or abs(int(m.group(2))) > 270):
+                d = int(m.group(1)) % 2048; j = max([i for i, c in enumerate(curves) if c <= d] or [0])
+                w[j] += 1.0
+                if j: w[j - 1] += 0.5
+    except OSError: pass
+    return w
 for r in range(ROUNDS):
     cands = []
     for _ in range(PAR):
-        c = random.choice(curves); k = random.choice(['vt', 'vt', 'a'])
+        c = random.choices(curves, weights)[0]; k = random.choice(['vt', 'vt', 'a', 'a', 'cruise'])
         n = json.loads(json.dumps({str(a): b for a, b in plan.items()})); n = {int(a): b for a, b in n.items()}
-        cur = n[c][k]
+        if k == 'cruise':
+            n[c]['cruise'] = 0.0 if n[c].get('cruise') else 1.0
+            if n[c]['vt'] >= 900: n[c]['vt'] = 230.0
+            cands.append((c, k, n)); continue
+        cur = n[c].get(k, 1.0)
         if k == 'vt' and cur >= 900: cur = VCAP
         step = STEP[k] * random.choice([-3, -2, -1, 1, 1, 2, 3])
         lo, hi = LIM[k]; v = min(hi, max(lo, cur + step))
@@ -62,7 +79,7 @@ for r in range(ROUNDS):
     i = min(range(PAR), key=lambda j: res[j][0])
     msg = ' '.join('%d.%s=%g:%.1f' % (c, k, n[c][k], sc) for (c, k, n), (sc, _) in zip(cands, res))
     if res[i][0] < best - 1e-6:
-        best, info, plan = res[i][0], res[i][1], cands[i][2]; write(plan, os.path.join(ROOT, OUT))
+        best, info, plan = res[i][0], res[i][1], cands[i][2]; write(plan, os.path.join(ROOT, OUT)); weights = hot(str(i))
         print(f'round {r} IMPROVED {best:.2f} {info}  [{msg}]', flush=True)
     else: print(f'round {r} no gain [{msg}]', flush=True)
 write(plan, os.path.join(ROOT, OUT)); print('done', best, info)
